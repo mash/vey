@@ -1,22 +1,7 @@
-Vey - Email Verifying Keyserver
-===============================
+package vey
 
-Vey is a Email Verifying Keyserver. It is a HTTP API server that provides APIs to get, delete and put public keys for verified email addresses.
+import "bytes"
 
-Saving a public key requires access to the email address and the private key. You prove that you have access to the email address and the private key by receiving a challenge in email and signing it with the private key.
-
-Deleting a key requires access to the email address. You have to be able to receive an email which includes a token.
-
-## Goals
-
-* Do not store emails
-* Realistic authentication to put and delete your keys
-
-## Interface
-
-The rough idea of Vey's interface.
-
-```go
 // Vey represent the public API of Email Verifying Keyserver.
 // Structs that implement Vey interface may use Cache, Verifier, Store interface to implement the API.
 type Vey interface {
@@ -69,8 +54,8 @@ type EmailDigest string
 type Digester interface {
 	Of(email string) EmailDigest
 }
-```
 
-## Vey ?
-
-From "Verify Email keYserver". Prounance like "Hey" replacing H with V.
+// Equal reports whether priv and x have the same value.
+func (pub PublicKey) Equal(x PublicKey) bool {
+	return pub.Type == x.Type && bytes.Equal(pub.PublicKey, x.PublicKey)
+}
