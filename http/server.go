@@ -79,7 +79,7 @@ func (h *VeyHandler) CommitPut(w http.ResponseWriter, r *http.Request, b Body) e
 			return Error{
 				Code: 400,
 				Msg:  err.Error(),
-				Err:  err,
+				Err:  nil,
 			}
 		}
 		return err

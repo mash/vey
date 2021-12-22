@@ -27,8 +27,8 @@ func Wrap(h Handler) http.Handler {
 					Msg:  http.StatusText(http.StatusInternalServerError),
 					Err:  err,
 				}
-				// TODO log error
 			}
+			Log.Error(err)
 			_ = WriteJSON(w, er.Code, er)
 		}
 	})

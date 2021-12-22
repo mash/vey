@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"os"
 
@@ -35,6 +36,8 @@ func main() {
 	}
 
 	log.Info().Str("version", Version).Str("buildDate", BuildDate)
+	vhttp.Log = NewLogger()
+
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case version.FullCommand():
 		break
@@ -46,4 +49,22 @@ func main() {
 		log.Info().Msg("listening on port " + *servePort)
 		http.ListenAndServe(":"+*servePort, h)
 	}
+}
+
+type logger struct{}
+
+// NewLogger returns a new default Logger that logs to stderr.
+func NewLogger() vhttp.Logger {
+	return logger{}
+}
+
+func (l logger) Error(err error) {
+	var er vhttp.Error
+	if errors.As(err, &er) {
+		if e := er.Unwrap(); e != nil {
+			log.Error().Err(e).Int("code", er.Code).Msg(er.Msg)
+			return
+		}
+	}
+	log.Error().Err(err).Msg("error")
 }
