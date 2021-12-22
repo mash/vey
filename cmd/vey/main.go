@@ -5,13 +5,17 @@ import (
 	"net/http"
 	"os"
 
-	_ "github.com/joho/godotenv/autoload"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/ses"
 	"github.com/mash/vey"
 	"github.com/mash/vey/email"
 	vhttp "github.com/mash/vey/http"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/alecthomas/kingpin.v2"
+	"gopkg.in/yaml.v2"
 )
 
 // injected via go build -ldflags
@@ -25,26 +29,48 @@ var (
 	debug   = app.Flag("debug", "Debug level logging turns on.").Bool()
 	version = app.Command("version", "Show version")
 
-	serve     = app.Command("serve", "Start server")
-	servePort = serve.Arg("port", "Server listens on this port").Default("8000").Envar("VEY_PORT").String()
+	serve            = app.Command("serve", "Start server")
+	servePort        = serve.Arg("port", "Server listens on this port").Default("8000").Envar("VEY_PORT").String()
+	serveEmailConfig = serve.Arg("emailConfig", "Email configuration file").Default("email.yml").Envar("VEY_EMAIL_CONFIG").String()
 )
 
 func main() {
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	cmd := kingpin.MustParse(app.Parse(os.Args[1:]))
+
 	if *debug {
+		log.Debug().Msg("Debug logging enabled.")
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	log.Info().Str("version", Version).Str("buildDate", BuildDate)
 	vhttp.Log = NewLogger()
 
-	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
+	switch cmd {
 	case version.FullCommand():
-		break
+		log.Info().Str("buildDate", BuildDate).Str("version", Version).Msg("")
+
 	case serve.FullCommand():
 		salt := []byte("salt")
 		k := vey.NewVey(vey.NewDigester(salt), vey.NewMemCache(), vey.NewMemStore())
-		s := email.NewLogSender()
+
+		sess, err := session.NewSession(&aws.Config{})
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to create aws session")
+		}
+
+		f, err := os.Open(*serveEmailConfig)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to open email config file: " + *serveEmailConfig)
+		}
+		dec := yaml.NewDecoder(f)
+		var emailConfig email.SESConfig
+		if err := dec.Decode(&emailConfig); err != nil {
+			log.Fatal().Err(err).Msg("failed to decode email config file: " + *serveEmailConfig)
+		}
+		log.Debug().Str("email config file", *serveEmailConfig).Msgf("config: %+v", emailConfig)
+
+		svc := ses.New(sess)
+		s := email.NewLogSender(email.NewSESSender(emailConfig, svc))
 		h := vhttp.NewHandler(k, s)
 		log.Info().Msg("listening on port " + *servePort)
 		http.ListenAndServe(":"+*servePort, h)
@@ -66,5 +92,11 @@ func (l logger) Error(err error) {
 			return
 		}
 	}
+
+	if aerr, ok := err.(awserr.Error); ok {
+		log.Error().Err(err).Str("code", aerr.Code()).Msg(aerr.Error())
+		return
+	}
+
 	log.Error().Err(err).Msg("error")
 }

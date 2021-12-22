@@ -1,0 +1,8 @@
+source: vey@getmage.app
+sourceArn: ""
+configurationSetName: default
+replyToAddresses: []
+returnPath: ""
+returnPathArn: ""
+deleteTemplate: vey_delete
+putTemplate: vey_put

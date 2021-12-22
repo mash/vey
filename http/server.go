@@ -22,7 +22,7 @@ func NewHandler(vey vey.Vey, sender email.Sender) http.Handler {
 	}
 	h.Handle("/getKeys", WrapF(AcceptJSON(h.GetKeys)))
 	h.Handle("/beginDelete", WrapF(AcceptJSON(h.BeginDelete)))
-	h.Handle("/commitDelete", WrapF(AcceptJSON(h.CommitDelete)))
+	h.Handle("/commitDelete", WrapF(h.CommitDelete))
 	h.Handle("/beginPut", WrapF(AcceptJSON(h.BeginPut)))
 	h.Handle("/commitPut", WrapF(AcceptJSON(h.CommitPut)))
 	return &h
@@ -55,8 +55,20 @@ func (h *VeyHandler) BeginDelete(w http.ResponseWriter, r *http.Request, b Body)
 	return WriteJSON(w, 200, map[string]interface{}{})
 }
 
-func (h *VeyHandler) CommitDelete(w http.ResponseWriter, r *http.Request, b Body) error {
-	if err := h.Vey.CommitDelete(b.Token); err != nil {
+// CommitDelete handles the final step of deleting the public key.
+// The user receives the URL to CommitDelete in the email and opens it in their browser.
+// token parameter should be in query.
+func (h *VeyHandler) CommitDelete(w http.ResponseWriter, r *http.Request) error {
+	s := r.URL.Query().Get("token")
+	token, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return Error{
+			Code: 400,
+			Msg:  "token decode failed",
+			Err:  err,
+		}
+	}
+	if err := h.Vey.CommitDelete(token); err != nil {
 		return err
 	}
 	return WriteJSON(w, 200, map[string]interface{}{})

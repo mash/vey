@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -55,7 +56,9 @@ func (c Client) BeginDelete(email string, publicKey vey.PublicKey) error {
 
 // CommitDelete calls the CommitDelete interface on the Vey server.
 func (c Client) CommitDelete(token []byte) error {
-	res, err := c.Do("/commitDelete", Body{Token: token})
+	q := url.Values{}
+	q.Add("token", base64.StdEncoding.EncodeToString(token))
+	res, err := c.Get("/commitDelete", q)
 	if err != nil {
 		return err
 	}
@@ -101,6 +104,30 @@ func (c Client) Do(path string, body Body) (*http.Response, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	res, err := c.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != 200 {
+		defer res.Body.Close()
+
+		body := Error{}
+		dec := json.NewDecoder(res.Body)
+		if err := dec.Decode(&body); err != nil {
+			return nil, ClientError{Msg: "json decode error", Res: res, Err: err}
+		}
+		return nil, ClientError{Msg: body.Msg, Res: res, Err: nil}
+	}
+	return res, nil
+}
+
+func (c Client) Get(path string, q url.Values) (*http.Response, error) {
+	u := c.root.ResolveReference(&url.URL{Path: path})
+	u.RawQuery = q.Encode()
+	req, err := http.NewRequest("GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 	res, err := c.Client.Do(req)
 	if err != nil {
 		return nil, err

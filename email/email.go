@@ -36,19 +36,35 @@ func (s *MemSender) SendChallenge(email, challenge string) error {
 	return nil
 }
 
-// LogSender implements Sender interface which logs the email, token and challenge to stderr.
-type LogSender struct{}
+// LogSender implements Sender interface which logs the email, token and challenge to stderr and forwards to the wrapped Sender.
+type LogSender struct {
+	Sender
+}
 
-func NewLogSender() Sender {
-	return LogSender{}
+func NewLogSender(s Sender) Sender {
+	return LogSender{
+		Sender: s,
+	}
 }
 
 func (s LogSender) SendToken(email, token string) error {
 	log.Printf("send token: %s to email: %s", token, email)
+	s.Sender.SendToken(email, token)
 	return nil
 }
 
 func (s LogSender) SendChallenge(email, challenge string) error {
 	log.Printf("send challenge: %s to email: %s", challenge, email)
+	s.Sender.SendChallenge(email, challenge)
+	return nil
+}
+
+type NullSender struct{}
+
+func (s NullSender) SendToken(email, token string) error {
+	return nil
+}
+
+func (s NullSender) SendChallenge(email, challenge string) error {
 	return nil
 }

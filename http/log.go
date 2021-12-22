@@ -5,7 +5,7 @@ import (
 	"log"
 )
 
-// Log is global variable that holds Logger.
+// Log is package global variable that holds Logger.
 var Log Logger = NewLogger()
 
 // Logger logs errors.
