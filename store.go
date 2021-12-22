@@ -16,7 +16,11 @@ func NewMemStore() Store {
 func (s *MemStore) Get(d EmailDigest) ([]PublicKey, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	return s.values[d], nil
+	ret := s.values[d]
+	if ret == nil {
+		return []PublicKey{}, nil
+	}
+	return ret, nil
 }
 
 func (s *MemStore) Delete(d EmailDigest, publickey PublicKey) error {

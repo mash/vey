@@ -15,7 +15,7 @@ func NewVey(digest Digester, cache Cache, store Store) Vey {
 	}
 }
 
-func (k vey) GetKeys(email string) (publickeys []PublicKey, err error) {
+func (k vey) GetKeys(email string) ([]PublicKey, error) {
 	digest := k.digest.Of(email)
 	return k.store.Get(digest)
 }
@@ -26,7 +26,7 @@ func (k vey) BeginDelete(email string, publickey PublicKey) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := k.cache.Set(string(token), Cached{
+	if err := k.cache.Set(token, Cached{
 		EmailDigest: digest,
 		PublicKey:   publickey,
 	}); err != nil {
@@ -36,7 +36,7 @@ func (k vey) BeginDelete(email string, publickey PublicKey) ([]byte, error) {
 }
 
 func (k vey) CommitDelete(token []byte) error {
-	cached, err := k.cache.Get(string(token))
+	cached, err := k.cache.Get(token)
 	if err != nil {
 		return err
 	}
@@ -49,7 +49,7 @@ func (k vey) BeginPut(email string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := k.cache.Set(string(challenge), Cached{
+	if err := k.cache.Set(challenge, Cached{
 		EmailDigest: digest,
 	}); err != nil {
 		return nil, err
@@ -57,12 +57,14 @@ func (k vey) BeginPut(email string) ([]byte, error) {
 	return challenge, nil
 }
 
+// CommitPut verifies the signature with the public key.
+// CommitPut returns ErrVerifyFailed if the signature is invalid.
 func (k vey) CommitPut(challenge, signature []byte, publickey PublicKey) error {
 	verifier := NewVerifier(publickey.Type)
 	if !verifier.Verify(publickey, signature, challenge) {
 		return ErrVerifyFailed
 	}
-	cached, err := k.cache.Get(string(challenge))
+	cached, err := k.cache.Get(challenge)
 	if err != nil {
 		return err
 	}

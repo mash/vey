@@ -2,7 +2,6 @@ package vey
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 )
 
 func NewToken() ([]byte, error) {
@@ -11,9 +10,7 @@ func NewToken() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]byte, base64.RawURLEncoding.EncodedLen(len(b)))
-	base64.RawURLEncoding.Encode(out, b)
-	return out, nil
+	return b, nil
 }
 
 func NewChallenge() ([]byte, error) {

@@ -14,8 +14,8 @@ type Vey interface {
 
 // Cache is a short-term key value store.
 type Cache interface {
-	Set(string, Cached) error
-	Get(string) (Cached, error)
+	Set([]byte, Cached) error
+	Get([]byte) (Cached, error)
 }
 
 type Cached struct {
@@ -43,8 +43,8 @@ const (
 )
 
 type PublicKey struct {
-	PublicKey []byte
-	Type      PublicKeyType
+	Key  []byte        `json:"key"`
+	Type PublicKeyType `json:"type"`
 }
 
 // EmailDigest is a hash of an email address.
@@ -57,5 +57,5 @@ type Digester interface {
 
 // Equal reports whether priv and x have the same value.
 func (pub PublicKey) Equal(x PublicKey) bool {
-	return pub.Type == x.Type && bytes.Equal(pub.PublicKey, x.PublicKey)
+	return pub.Type == x.Type && bytes.Equal(pub.Key, x.Key)
 }

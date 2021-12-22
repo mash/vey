@@ -1,6 +1,7 @@
 package vey
 
 import (
+	"encoding/base64"
 	"sync"
 )
 
@@ -16,15 +17,17 @@ func NewMemCache() Cache {
 	}
 }
 
-func (c *MemCache) Set(key string, val Cached) error {
+func (c *MemCache) Set(key []byte, val Cached) error {
 	c.m.Lock()
 	defer c.m.Unlock()
-	c.values[key] = val
+	str := base64.StdEncoding.EncodeToString(key)
+	c.values[str] = val
 	return nil
 }
 
-func (c *MemCache) Get(key string) (Cached, error) {
+func (c *MemCache) Get(key []byte) (Cached, error) {
 	c.m.Lock()
 	defer c.m.Unlock()
-	return c.values[key], nil
+	str := base64.StdEncoding.EncodeToString(key)
+	return c.values[str], nil
 }

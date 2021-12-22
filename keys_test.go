@@ -15,6 +15,9 @@ func TestMemKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetKeys: %v", err)
 	}
+	if keys == nil {
+		t.Fatalf("GetKeys: got nil keys")
+	}
 	if e, g := 0, len(keys); e != g {
 		t.Errorf("len(keys) expected %v but got %v", e, g)
 	}
@@ -32,12 +35,12 @@ func TestMemKeys(t *testing.T) {
 		t.Fatalf("GenerateKey: %v", err)
 	}
 	signature := ed25519.Sign(private, challenge)
-	if err := k.CommitPut(challenge, signature, PublicKey{Type: SSHEd25519, PublicKey: public}); err != nil {
+	if err := k.CommitPut(challenge, signature, PublicKey{Type: SSHEd25519, Key: public}); err != nil {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
 	invalidSignature := ed25519.Sign(private, []byte(string(challenge)+"invalid"))
-	err = k.CommitPut(challenge, invalidSignature, PublicKey{Type: SSHEd25519, PublicKey: public})
+	err = k.CommitPut(challenge, invalidSignature, PublicKey{Type: SSHEd25519, Key: public})
 	if e, g := ErrVerifyFailed, err; e != g {
 		t.Fatalf("CommitPut: expected %v but got %v", e, g)
 	}
@@ -52,7 +55,28 @@ func TestMemKeys(t *testing.T) {
 	if e, g := SSHEd25519, keys[0].Type; e != g {
 		t.Fatalf("public key type expected %v but got %v", e, g)
 	}
-	if e, g := []byte(public), keys[0].PublicKey; !bytes.Equal(e, g) {
+	if e, g := []byte(public), keys[0].Key; !bytes.Equal(e, g) {
 		t.Fatalf("public key expected %v but got %v", e, g)
+	}
+
+	token, err := k.BeginDelete("test@example.com", PublicKey{Type: SSHEd25519, Key: public})
+	if err != nil {
+		t.Fatalf("BeginDelete")
+	}
+	if len(token) == 0 {
+		t.Fatalf("token is empty")
+	}
+
+	err = k.CommitDelete(token)
+	if err != nil {
+		t.Fatalf("CommitDelete: %v", err)
+	}
+
+	keys, err = k.GetKeys("test@example.com")
+	if err != nil {
+		t.Fatalf("GetKeys: %v", err)
+	}
+	if e, g := 0, len(keys); e != g {
+		t.Errorf("len(keys) expected %v but got %v", e, g)
 	}
 }
