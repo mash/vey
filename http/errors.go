@@ -13,6 +13,10 @@ func (e Error) Error() string {
 	return e.Msg
 }
 
+func (e Error) Unwrap() error {
+	return e.Err
+}
+
 type ClientError struct {
 	Msg string         // Error message
 	Res *http.Response // The *http.Response returned from http.Client if it was returned from http.Client
@@ -22,4 +26,8 @@ type ClientError struct {
 // ClientError implements error interface.
 func (e ClientError) Error() string {
 	return e.Msg
+}
+
+func (e ClientError) Unwrap() error {
+	return e.Err
 }
