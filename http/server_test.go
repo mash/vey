@@ -28,6 +28,34 @@ func serve(t *testing.T, h http.Handler) net.Listener {
 	return l
 }
 
+func testGetKeys(t *testing.T, v Client, email string, expected []vey.PublicKey) {
+	got, err := v.GetKeys(email)
+	if err != nil {
+		t.Fatalf("testGetKeys: %v", err)
+	}
+	if got == nil {
+		t.Fatalf("testGetKeys: got nil keys")
+	}
+	if e, g := len(expected), len(got); e != g {
+		t.Errorf("testGetKeys: len(got) expected %v but got %v", e, g)
+	}
+	for i, e := range expected {
+		if e.Type != got[i].Type {
+			t.Errorf("testGetKeys: expected %v but got %v", e, got[i])
+		}
+		if !bytes.Equal(e.Key, got[i].Key) {
+			t.Errorf("testGetKeys: expected %v but got %v", e, got[i])
+		}
+	}
+}
+
+func testBeginPut(t *testing.T, v Client, email string) {
+	err := v.BeginPut(email)
+	if err != nil {
+		t.Fatalf("BeginPut: %v", err)
+	}
+}
+
 // TestServer tests the server similarly to the way TestMemKeys in keys_test.go but over the HTTP API.
 func TestServer(t *testing.T) {
 	salt := []byte("salt")
@@ -38,18 +66,10 @@ func TestServer(t *testing.T) {
 	l := serve(t, h)
 
 	client := NewClient("http://" + l.Addr().String())
-	keys, err := client.GetKeys("test@example.com")
-	if err != nil {
-		t.Fatalf("GetKeys: %v", err)
-	}
-	if e, g := 0, len(keys); e != g {
-		t.Errorf("len(keys) expected %v but got %v", e, g)
-	}
+	testGetKeys(t, client, "test@example.com", []vey.PublicKey{})
 
-	err = client.BeginPut("test@example.com")
-	if err != nil {
-		t.Fatalf("BeginPut: %v", err)
-	}
+	testBeginPut(t, client, "test@example.com")
+
 	challenge := sender.Challenge
 	if len(challenge) == 0 {
 		t.Fatalf("challenge is empty")
@@ -74,19 +94,30 @@ func TestServer(t *testing.T) {
 		t.Fatalf("CommitPut: expected %v but got %v", e, g)
 	}
 
-	keys, err = client.GetKeys("test@example.com")
+	testGetKeys(t, client, "test@example.com", []vey.PublicKey{
+		{Type: vey.SSHEd25519, Key: public},
+	})
+
+	// try to put again and test GetKeys does not return duplicates
+
+	testBeginPut(t, client, "test@example.com")
+
+	challenge2 := sender.Challenge
+	challengeb2, err := base64.StdEncoding.DecodeString(challenge2)
 	if err != nil {
-		t.Fatalf("GetKeys: %v", err)
+		t.Fatalf("base64 decode error: %v", err)
 	}
-	if e, g := 1, len(keys); e != g {
-		t.Fatalf("len(keys) expected %v but got %v", e, g)
+	if bytes.Equal(challengeb, challengeb2) {
+		t.Fatalf("challenge and challenge2 should not be the same but got: %v and %v", challenge, challenge2)
 	}
-	if e, g := vey.SSHEd25519, keys[0].Type; e != g {
-		t.Fatalf("public key type expected %v but got %v", e, g)
+	signature2 := ed25519.Sign(private, challengeb2)
+	if err := client.CommitPut(challengeb2, signature2, vey.PublicKey{Type: vey.SSHEd25519, Key: public}); err != nil {
+		t.Fatalf("CommitPut: %v", err)
 	}
-	if e, g := []byte(public), keys[0].Key; !bytes.Equal(e, g) {
-		t.Fatalf("public key expected %v but got %v", e, g)
-	}
+
+	testGetKeys(t, client, "test@example.com", []vey.PublicKey{
+		{Type: vey.SSHEd25519, Key: public},
+	})
 
 	err = client.BeginDelete("test@example.com", vey.PublicKey{Type: vey.SSHEd25519, Key: public})
 	if err != nil {
@@ -106,11 +137,5 @@ func TestServer(t *testing.T) {
 		t.Fatalf("CommitDelete: %v", err)
 	}
 
-	keys, err = client.GetKeys("test@example.com")
-	if err != nil {
-		t.Fatalf("GetKeys: %v", err)
-	}
-	if e, g := 0, len(keys); e != g {
-		t.Errorf("len(keys) expected %v but got %v", e, g)
-	}
+	testGetKeys(t, client, "test@example.com", []vey.PublicKey{})
 }
