@@ -48,7 +48,8 @@ type PublicKey struct {
 }
 
 // EmailDigest is a hash of an email address.
-type EmailDigest string
+// EmailDigest is a []byte, it cannot be used as a map key.
+type EmailDigest []byte
 
 // Digester takes an email and returns a hash of it.
 type Digester interface {

@@ -1,6 +1,7 @@
 package vey
 
 import (
+	"encoding/base64"
 	"errors"
 	"sync"
 
@@ -11,19 +12,21 @@ import (
 
 type MemStore struct {
 	m      sync.Mutex
-	values map[EmailDigest][]PublicKey
+	values map[string][]PublicKey
 }
 
 func NewMemStore() Store {
 	return &MemStore{
-		values: make(map[EmailDigest][]PublicKey),
+		values: make(map[string][]PublicKey),
 	}
 }
 
 func (s *MemStore) Get(d EmailDigest) ([]PublicKey, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	ret := s.values[d]
+
+	key := base64.StdEncoding.EncodeToString(d)
+	ret := s.values[key]
 	if ret == nil {
 		return []PublicKey{}, nil
 	}
@@ -33,9 +36,11 @@ func (s *MemStore) Get(d EmailDigest) ([]PublicKey, error) {
 func (s *MemStore) Delete(d EmailDigest, publickey PublicKey) error {
 	s.m.Lock()
 	defer s.m.Unlock()
-	for i, v := range s.values[d] {
+
+	key := base64.StdEncoding.EncodeToString(d)
+	for i, v := range s.values[key] {
 		if v.Equal(publickey) {
-			s.values[d] = append(s.values[d][:i], s.values[d][i+1:]...)
+			s.values[key] = append(s.values[key][:i], s.values[key][i+1:]...)
 			return nil
 		}
 	}
@@ -45,12 +50,14 @@ func (s *MemStore) Delete(d EmailDigest, publickey PublicKey) error {
 func (s *MemStore) Put(d EmailDigest, publickey PublicKey) error {
 	s.m.Lock()
 	defer s.m.Unlock()
-	for _, v := range s.values[d] {
+
+	key := base64.StdEncoding.EncodeToString(d)
+	for _, v := range s.values[key] {
 		if v.Equal(publickey) {
 			return nil
 		}
 	}
-	s.values[d] = append(s.values[d], publickey)
+	s.values[key] = append(s.values[key], publickey)
 	return nil
 }
 
@@ -61,7 +68,7 @@ type DynamoDbStore struct {
 
 // DynamoDbStoreItem represents a single item in the DynamoDB store table.
 type DynamoDbStoreItem struct {
-	ID string
+	ID []byte
 	// PublicKeys is a set of PublicKeys marshalled into []byte.
 	// The first byte is the PublicKey.Type and the rest is the PublicKey.Key .
 	PublicKeys [][]byte `dynamodbav:"publickeys,omitempty,binaryset"`
@@ -88,7 +95,7 @@ func (item DynamoDbStoreItem) Keys() ([]PublicKey, error) {
 
 func (s *DynamoDbStore) Get(d EmailDigest) ([]PublicKey, error) {
 	key := DynamoDbStoreItem{
-		ID: string(d),
+		ID: d,
 	}
 	k, err := dynamodbattribute.MarshalMap(key)
 	if err != nil {
@@ -119,7 +126,7 @@ func (s *DynamoDbStore) Get(d EmailDigest) ([]PublicKey, error) {
 // Delete atomically deletes the public key from the set of public keys for the email digest.
 func (s *DynamoDbStore) Delete(d EmailDigest, publickey PublicKey) error {
 	key := DynamoDbStoreItem{
-		ID: string(d),
+		ID: d,
 	}
 	k, err := dynamodbattribute.MarshalMap(key)
 	if err != nil {
@@ -145,7 +152,7 @@ func (s *DynamoDbStore) Delete(d EmailDigest, publickey PublicKey) error {
 // Put atomically adds the public key in the set of public keys for the email digest.
 func (s *DynamoDbStore) Put(d EmailDigest, publickey PublicKey) error {
 	key := DynamoDbStoreItem{
-		ID: string(d),
+		ID: d,
 	}
 	k, err := dynamodbattribute.MarshalMap(key)
 	if err != nil {

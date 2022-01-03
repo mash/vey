@@ -2,7 +2,6 @@ package vey
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 )
 
 // Digest implements Digester interface.
@@ -18,5 +17,5 @@ func (d Digest) Of(email string) EmailDigest {
 	h := sha256.New()
 	h.Write(d.salt)
 	sum := h.Sum([]byte(email))
-	return EmailDigest(base64.StdEncoding.EncodeToString(sum))
+	return EmailDigest(sum)
 }
