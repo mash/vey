@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -68,14 +69,18 @@ func main() {
 			svc := dynamodb.New(sess)
 			store = vey.NewDynamoDbStore(*serveStoreDynDBName, svc)
 		} else {
+			log.Debug().Msg("using memory store")
 			store = vey.NewMemStore()
 		}
 
 		var cache vey.Cache
-		if *serveCache == "memory" {
+		if *serveCache == "dynamodb" {
+			log.Debug().Msgf("using dynamodb cache: %s", *serveCacheDynDBName)
+			svc := dynamodb.New(sess)
+			cache = vey.NewDynamoDbCache(*serveCacheDynDBName, svc, time.Minute*15)
+		} else {
+			log.Debug().Msg("using memory cache")
 			cache = vey.NewMemCache()
-			// } else {
-			// 	cache = vey.NewDynamoDbCache()
 		}
 
 		k := vey.NewVey(vey.NewDigester(salt), cache, store)

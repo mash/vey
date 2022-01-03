@@ -59,10 +59,10 @@ type DynamoDbStore struct {
 	D         *dynamodb.DynamoDB
 }
 
-// DynamoDbItem represents a single item in the DynamoDB table.
-type DynamoDbItem struct {
+// DynamoDbStoreItem represents a single item in the DynamoDB store table.
+type DynamoDbStoreItem struct {
 	ID string
-	// PublicKeys marshals PublicKey into []byte.
+	// PublicKeys is a set of PublicKeys marshalled into []byte.
 	// The first byte is the PublicKey.Type and the rest is the PublicKey.Key .
 	PublicKeys [][]byte `dynamodbav:"publickeys,omitempty,binaryset"`
 }
@@ -74,7 +74,7 @@ func NewDynamoDbStore(tableName string, svc *dynamodb.DynamoDB) Store {
 	}
 }
 
-func (item DynamoDbItem) Keys() ([]PublicKey, error) {
+func (item DynamoDbStoreItem) Keys() ([]PublicKey, error) {
 	ret := make([]PublicKey, len(item.PublicKeys))
 	for i, b := range item.PublicKeys {
 		k, err := decodeDynamoDb(b)
@@ -87,7 +87,7 @@ func (item DynamoDbItem) Keys() ([]PublicKey, error) {
 }
 
 func (s *DynamoDbStore) Get(d EmailDigest) ([]PublicKey, error) {
-	key := DynamoDbItem{
+	key := DynamoDbStoreItem{
 		ID: string(d),
 	}
 	k, err := dynamodbattribute.MarshalMap(key)
@@ -105,7 +105,7 @@ func (s *DynamoDbStore) Get(d EmailDigest) ([]PublicKey, error) {
 	if result.Item == nil {
 		return []PublicKey{}, nil
 	}
-	var item DynamoDbItem
+	var item DynamoDbStoreItem
 	if err := dynamodbattribute.UnmarshalMap(result.Item, &item); err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (s *DynamoDbStore) Get(d EmailDigest) ([]PublicKey, error) {
 
 // Delete atomically deletes the public key from the set of public keys for the email digest.
 func (s *DynamoDbStore) Delete(d EmailDigest, publickey PublicKey) error {
-	key := DynamoDbItem{
+	key := DynamoDbStoreItem{
 		ID: string(d),
 	}
 	k, err := dynamodbattribute.MarshalMap(key)
@@ -144,7 +144,7 @@ func (s *DynamoDbStore) Delete(d EmailDigest, publickey PublicKey) error {
 
 // Put atomically adds the public key in the set of public keys for the email digest.
 func (s *DynamoDbStore) Put(d EmailDigest, publickey PublicKey) error {
-	key := DynamoDbItem{
+	key := DynamoDbStoreItem{
 		ID: string(d),
 	}
 	k, err := dynamodbattribute.MarshalMap(key)
