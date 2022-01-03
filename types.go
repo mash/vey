@@ -28,7 +28,7 @@ type Verifier interface {
 	Verify(publickey PublicKey, signature, challenge []byte) bool
 }
 
-// Store stores the public keys for a given email address hash.
+// Store stores a unique set of public keys for a given email address hash.
 // We do not have to store the email. The hash of it is enough.
 type Store interface {
 	Get(EmailDigest) ([]PublicKey, error)

@@ -7,28 +7,44 @@ import (
 	"testing"
 )
 
-func TestMemKeys(t *testing.T) {
-	salt := []byte("salt")
-	k := NewVey(NewDigester(salt), NewMemCache(), NewMemStore())
-
-	keys, err := k.GetKeys("test@example.com")
+func testGetKeys(t *testing.T, v Vey, email string, expected []PublicKey) {
+	got, err := v.GetKeys(email)
 	if err != nil {
-		t.Fatalf("GetKeys: %v", err)
+		t.Fatalf("testGetKeys: %v", err)
 	}
-	if keys == nil {
-		t.Fatalf("GetKeys: got nil keys")
+	if got == nil {
+		t.Fatalf("testGetKeys: got nil keys")
 	}
-	if e, g := 0, len(keys); e != g {
-		t.Errorf("len(keys) expected %v but got %v", e, g)
+	if e, g := len(expected), len(got); e != g {
+		t.Errorf("testGetKeys: len(got) expected %v but got %v", e, g)
 	}
+	for i, e := range expected {
+		if e.Type != got[i].Type {
+			t.Errorf("testGetKeys: expected %v but got %v", e, got[i])
+		}
+		if !bytes.Equal(e.Key, got[i].Key) {
+			t.Errorf("testGetKeys: expected %v but got %v", e, got[i])
+		}
+	}
+}
 
-	challenge, err := k.BeginPut("test@example.com")
+func testBeginPut(t *testing.T, v Vey, email string) []byte {
+	challenge, err := v.BeginPut(email)
 	if err != nil {
 		t.Fatalf("BeginPut: %v", err)
 	}
 	if len(challenge) == 0 {
 		t.Fatalf("challenge is empty")
 	}
+	return challenge
+}
+
+func testImpl(t *testing.T, d Digester, c Cache, s Store) {
+	k := NewVey(d, c, s)
+
+	testGetKeys(t, k, "test@example.com", []PublicKey{})
+
+	challenge := testBeginPut(t, k, "test@example.com")
 
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -45,19 +61,24 @@ func TestMemKeys(t *testing.T) {
 		t.Fatalf("CommitPut: expected %v but got %v", e, g)
 	}
 
-	keys, err = k.GetKeys("test@example.com")
-	if err != nil {
-		t.Fatalf("GetKeys: %v", err)
+	testGetKeys(t, k, "test@example.com", []PublicKey{
+		{Type: SSHEd25519, Key: public},
+	})
+
+	// try to put again and test GetKeys does not return duplicates
+
+	challenge2 := testBeginPut(t, k, "test@example.com")
+	if bytes.Equal(challenge, challenge2) {
+		t.Fatalf("challenge and challenge2 should not be the same but got: %v and %v", challenge, challenge2)
 	}
-	if e, g := 1, len(keys); e != g {
-		t.Fatalf("len(keys) expected %v but got %v", e, g)
+	signature2 := ed25519.Sign(private, challenge2)
+	if err := k.CommitPut(challenge2, signature2, PublicKey{Type: SSHEd25519, Key: public}); err != nil {
+		t.Fatalf("CommitPut: %v", err)
 	}
-	if e, g := SSHEd25519, keys[0].Type; e != g {
-		t.Fatalf("public key type expected %v but got %v", e, g)
-	}
-	if e, g := []byte(public), keys[0].Key; !bytes.Equal(e, g) {
-		t.Fatalf("public key expected %v but got %v", e, g)
-	}
+
+	testGetKeys(t, k, "test@example.com", []PublicKey{
+		{Type: SSHEd25519, Key: public},
+	})
 
 	token, err := k.BeginDelete("test@example.com", PublicKey{Type: SSHEd25519, Key: public})
 	if err != nil {
@@ -72,11 +93,10 @@ func TestMemKeys(t *testing.T) {
 		t.Fatalf("CommitDelete: %v", err)
 	}
 
-	keys, err = k.GetKeys("test@example.com")
-	if err != nil {
-		t.Fatalf("GetKeys: %v", err)
-	}
-	if e, g := 0, len(keys); e != g {
-		t.Errorf("len(keys) expected %v but got %v", e, g)
-	}
+	testGetKeys(t, k, "test@example.com", []PublicKey{})
+}
+
+func TestMemKeys(t *testing.T) {
+	salt := []byte("salt")
+	testImpl(t, NewDigester(salt), NewMemCache(), NewMemStore())
 }

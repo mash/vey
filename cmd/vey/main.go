@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/ses"
 	"github.com/mash/vey"
 	"github.com/mash/vey/email"
@@ -29,9 +30,13 @@ var (
 	debug   = app.Flag("debug", "Debug level logging turns on.").Bool()
 	version = app.Command("version", "Show version")
 
-	serve            = app.Command("serve", "Start server")
-	servePort        = serve.Arg("port", "Server listens on this port").Default("8000").Envar("VEY_PORT").String()
-	serveEmailConfig = serve.Arg("emailConfig", "Email configuration file").Default("email.yml").Envar("VEY_EMAIL_CONFIG").String()
+	serve               = app.Command("serve", "Start server")
+	servePort           = serve.Flag("port", "Server listens on this port").Default("8000").Envar("VEY_PORT").String()
+	serveEmailConfig    = serve.Flag("emailConfig", "Email configuration file").Default("email.yml").Envar("VEY_EMAIL_CONFIG").String()
+	serveStore          = serve.Flag("store", "Store implementation. Can be \"dynamodb\" or \"memory\".").Default("memory").String()
+	serveStoreDynDBName = serve.Flag("store-dyndb-name", "DynamoDB table name used to implement Store interface").Default("veystore").String()
+	serveCache          = serve.Flag("cache", "Cache implementation").Default("memory").String()
+	serveCacheDynDBName = serve.Flag("cache-dyndb-name", "DynamoDB table name used to implement Cache interface").Default("veycache").String()
 )
 
 func main() {
@@ -51,12 +56,29 @@ func main() {
 
 	case serve.FullCommand():
 		salt := []byte("salt")
-		k := vey.NewVey(vey.NewDigester(salt), vey.NewMemCache(), vey.NewMemStore())
 
 		sess, err := session.NewSession(&aws.Config{})
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to create aws session")
 		}
+
+		var store vey.Store
+		if *serveStore == "dynamodb" {
+			log.Debug().Msgf("using dynamodb store: %s", *serveStoreDynDBName)
+			svc := dynamodb.New(sess)
+			store = vey.NewDynamoDbStore(*serveStoreDynDBName, svc)
+		} else {
+			store = vey.NewMemStore()
+		}
+
+		var cache vey.Cache
+		if *serveCache == "memory" {
+			cache = vey.NewMemCache()
+			// } else {
+			// 	cache = vey.NewDynamoDbCache()
+		}
+
+		k := vey.NewVey(vey.NewDigester(salt), cache, store)
 
 		f, err := os.Open(*serveEmailConfig)
 		if err != nil {

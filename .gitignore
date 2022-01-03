@@ -1,2 +1,3 @@
 tmp/
 cmd/lambda/main
+.envrc
