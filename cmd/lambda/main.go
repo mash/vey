@@ -1,16 +1,18 @@
 package main
 
 import (
-	"bytes"
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
+	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/ses"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"github.com/mash/vey"
@@ -23,13 +25,14 @@ import (
 )
 
 var (
-	adapter *httpadapter.HandlerAdapter
+	adapter *httpadapter.HandlerAdapterV2
 	// injected via go build -ldflags
 	Version   string
 	BuildDate string
 )
 
-func Handler(ctx context.Context, req events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+// API Gateway uses Payload format version v2.0.
+func Handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	return adapter.ProxyWithContext(ctx, req)
 }
 
@@ -49,35 +52,49 @@ func setup() {
 	}
 
 	if cfg.Debug {
-		log.Debug().Msg("Debug logging enabled.")
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		log.Debug().Msg("debug logging enabled")
 	}
-
-	vhttp.Log = NewLogger()
-
-	k := vey.NewVey(vey.NewDigester(cfg.Salt), vey.NewMemCache(), vey.NewMemStore())
 
 	sess, err := session.NewSession(&aws.Config{})
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create aws session")
 	}
 
+	svc := dynamodb.New(sess)
+	cache := vey.NewDynamoDbCache(cfg.CacheTableName, svc, cfg.CacheExpiry)
+	store := vey.NewDynamoDbStore(cfg.StoreTableName, svc)
+
+	salt, err := base64.StdEncoding.DecodeString(cfg.Salt)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to decode salt")
+	}
+	k := vey.NewVey(vey.NewDigester(salt), cache, store)
+
 	emailConfig, err := loadEmailConfig("email.yml")
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load email.yml")
 	}
-	log.Debug().Msgf("email config: %+v", emailConfig)
 
-	svc := ses.New(sess)
-	s := email.NewLogSender(email.NewSESSender(emailConfig, svc))
-	h := vhttp.NewHandler(k, s)
+	sender := email.NewSESSender(emailConfig, ses.New(sess))
+	if cfg.Debug {
+		sender = email.NewLogSender(sender)
+	}
+	h := vhttp.NewHandler(k, sender)
+
+	vhttp.Log = NewLogger()
+
 	log.Info().Msg("starting")
-	adapter = httpadapter.New(h)
+	adapter = httpadapter.NewV2(h)
 }
 
 type Config struct {
-	Salt  []byte `yaml:"salt"`
-	Debug bool   `yaml:"debug"`
+	// base64 encoded
+	Salt           string        `yaml:"salt"`
+	Debug          bool          `yaml:"debug"`
+	StoreTableName string        `yaml:"store_table_name"`
+	CacheTableName string        `yaml:"cache_table_name"`
+	CacheExpiry    time.Duration `yaml:"cache_expiry"`
 }
 
 // loadConfig loads config from file encrypted with sops.
@@ -87,10 +104,8 @@ func loadConfig(file string) (Config, error) {
 		return Config{}, err
 	}
 
-	buf := bytes.NewBuffer(b)
-	dec := yaml.NewDecoder(buf)
 	var c Config
-	if err := dec.Decode(&c); err != nil {
+	if err := yaml.Unmarshal(b, &c); err != nil {
 		return c, err
 	}
 	return c, nil

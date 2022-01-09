@@ -1,0 +1,6 @@
+# vey.yml should be sops-encrypted with a KMS key accessible from Lambda
+salt: A5abkpyh3Sq09UaJkxBboJlfumktkEv1YRpxlDkTBrs=
+debug: false
+store_table_name: veystore
+cache_table_name: veycache
+cache_expiry: 15m
