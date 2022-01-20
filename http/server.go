@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/base64"
 	"net/http"
+	"net/url"
 
 	"github.com/mash/vey"
 	"github.com/mash/vey/email"
@@ -10,21 +11,24 @@ import (
 
 type VeyHandler struct {
 	*http.ServeMux
-	Vey    vey.Vey
-	Sender email.Sender
+	Vey     vey.Vey
+	Sender  email.Sender
+	OpenURL *url.URL
 }
 
-func NewHandler(vey vey.Vey, sender email.Sender) http.Handler {
+func NewHandler(vey vey.Vey, sender email.Sender, open *url.URL) http.Handler {
 	h := VeyHandler{
 		ServeMux: http.NewServeMux(),
 		Vey:      vey,
 		Sender:   sender,
+		OpenURL:  open,
 	}
 	h.Handle("/getKeys", WrapF(AcceptJSON(h.GetKeys)))
 	h.Handle("/beginDelete", WrapF(AcceptJSON(h.BeginDelete)))
 	h.Handle("/commitDelete", WrapF(h.CommitDelete))
 	h.Handle("/beginPut", WrapF(AcceptJSON(h.BeginPut)))
 	h.Handle("/commitPut", WrapF(AcceptJSON(h.CommitPut)))
+	h.Handle("/open", WrapF(h.Open))
 	return &h
 }
 
@@ -97,4 +101,16 @@ func (h *VeyHandler) CommitPut(w http.ResponseWriter, r *http.Request, b Body) e
 		return err
 	}
 	return WriteJSON(w, 200, map[string]interface{}{})
+}
+
+func (h *VeyHandler) Open(w http.ResponseWriter, r *http.Request) error {
+	if h.OpenURL == nil || r.Method != http.MethodGet {
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+		return nil
+	}
+
+	next := *h.OpenURL
+	next.RawQuery = r.URL.RawQuery
+	http.Redirect(w, r, next.String(), http.StatusFound)
+	return nil
 }

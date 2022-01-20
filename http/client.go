@@ -23,8 +23,13 @@ func NewClient(root string) Client {
 		panic(err)
 	}
 	return Client{
-		Client: http.Client{},
-		root:   *u,
+		Client: http.Client{
+			// Client does not follow redirects, to be able to get the Location header in Open().
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		},
+		root: *u,
 	}
 }
 
@@ -88,6 +93,18 @@ func (c Client) CommitPut(challenge, signature []byte, publicKey vey.PublicKey) 
 	}
 	res.Body.Close()
 	return nil
+}
+
+// Open calls the /open path on the Vey server, and returns the redirect response's Location header.
+func (c Client) Open(query url.Values) (string, error) {
+	// We're expecting a 302 response
+	_, err := c.Get("/open", query)
+	if err != nil {
+		if er, ok := err.(ClientError); ok && er.Res != nil && er.Res.StatusCode == 302 {
+			return er.Res.Header.Get("Location"), nil
+		}
+	}
+	return "", err
 }
 
 // Do does request preparation and error handling common to all of Vey's HTTP APIs.

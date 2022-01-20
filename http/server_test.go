@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"net"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/mash/vey"
@@ -61,7 +62,9 @@ func TestServer(t *testing.T) {
 	salt := []byte("salt")
 	v := vey.NewVey(vey.NewDigester(salt), vey.NewMemCache(), vey.NewMemStore())
 	sender_ := email.NewMemSender()
-	h := NewHandler(v, sender_)
+
+	open, _ := url.Parse("exampleapp://open")
+	h := NewHandler(v, sender_, open)
 	sender := sender_.(*email.MemSender)
 	l := serve(t, h)
 
@@ -77,6 +80,16 @@ func TestServer(t *testing.T) {
 	challengeb, err := base64.StdEncoding.DecodeString(challenge)
 	if err != nil {
 		t.Fatalf("base64 decode error: %v", err)
+	}
+
+	q := url.Values{}
+	q.Set("challenge", challenge)
+	next, err := client.Open(q)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if e, g := "exampleapp://open?"+q.Encode(), next; e != g {
+		t.Fatalf("open expected %v but got %v", e, g)
 	}
 
 	public, private, err := ed25519.GenerateKey(rand.Reader)

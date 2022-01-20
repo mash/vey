@@ -98,7 +98,7 @@ func main() {
 
 		svc := ses.New(sess)
 		s := email.NewLogSender(email.NewSESSender(emailConfig, svc))
-		h := vhttp.NewHandler(k, s)
+		h := vhttp.NewHandler(k, s, nil)
 		log.Info().Msg("listening on port " + *servePort)
 		http.ListenAndServe(":"+*servePort, h)
 	}

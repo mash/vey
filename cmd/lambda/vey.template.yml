@@ -4,3 +4,4 @@ debug: false
 store_table_name: veystore
 cache_table_name: veycache
 cache_expiry: 15m
+open_url: exampleapp://open

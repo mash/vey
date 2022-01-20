@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"net/url"
 	"os"
 	"time"
 
@@ -56,6 +57,15 @@ func setup() {
 		log.Debug().Msg("debug logging enabled")
 	}
 
+	var open *url.URL
+	if cfg.OpenURL != "" {
+		u, err := url.Parse(cfg.OpenURL)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to parse OpenURL")
+		}
+		open = u
+	}
+
 	sess, err := session.NewSession(&aws.Config{})
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create aws session")
@@ -80,7 +90,7 @@ func setup() {
 	if cfg.Debug {
 		sender = email.NewLogSender(sender)
 	}
-	h := vhttp.NewHandler(k, sender)
+	h := vhttp.NewHandler(k, sender, open)
 
 	vhttp.Log = NewLogger()
 
@@ -95,6 +105,7 @@ type Config struct {
 	StoreTableName string        `yaml:"store_table_name"`
 	CacheTableName string        `yaml:"cache_table_name"`
 	CacheExpiry    time.Duration `yaml:"cache_expiry"`
+	OpenURL        string        `yaml:"open_url"`
 }
 
 // loadConfig loads config from file encrypted with sops.
