@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"net"
 	"net/http"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/mash/vey"
 	"github.com/mash/vey/email"
+	"golang.org/x/crypto/ssh"
 )
 
 func serve(t *testing.T, h http.Handler) net.Listener {
@@ -59,6 +61,8 @@ func testBeginPut(t *testing.T, v Client, email string) {
 
 // TestServer tests the server similarly to the way TestMemKeys in keys_test.go but over the HTTP API.
 func TestServer(t *testing.T) {
+	Log = NilLogger()
+
 	salt := []byte("salt")
 	v := vey.NewVey(vey.NewDigester(salt), vey.NewMemCache(), vey.NewMemStore())
 	sender_ := email.NewMemSender()
@@ -92,23 +96,28 @@ func TestServer(t *testing.T) {
 		t.Fatalf("open expected %v but got %v", e, g)
 	}
 
-	public, private, err := ed25519.GenerateKey(rand.Reader)
+	edpub, edpriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	signature := ed25519.Sign(private, challengeb)
-	if err := client.CommitPut(challengeb, signature, vey.PublicKey{Type: vey.SSHEd25519, Key: public}); err != nil {
+	sshpub, err := ssh.NewPublicKey(edpub)
+	if err != nil {
+		t.Fatalf("NewPublicKey: %v", err)
+	}
+	pub := ssh.MarshalAuthorizedKey(sshpub)
+	signature := ed25519.Sign(edpriv, challengeb)
+	if err := client.CommitPut(challengeb, signature, vey.PublicKey{Type: vey.SSHEd25519, Key: pub}); err != nil {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
-	invalidSignature := ed25519.Sign(private, []byte(string(challengeb)+"invalid"))
-	err = client.CommitPut(challengeb, invalidSignature, vey.PublicKey{Type: vey.SSHEd25519, Key: public})
+	invalidSignature := ed25519.Sign(edpriv, []byte(string(challengeb)+"invalid"))
+	err = client.CommitPut(challengeb, invalidSignature, vey.PublicKey{Type: vey.SSHEd25519, Key: pub})
 	if e, g := vey.ErrVerifyFailed.Error(), err.Error(); e != g {
 		t.Fatalf("CommitPut: expected %v but got %v", e, g)
 	}
 
 	testGetKeys(t, client, "test@example.com", []vey.PublicKey{
-		{Type: vey.SSHEd25519, Key: public},
+		{Type: vey.SSHEd25519, Key: pub},
 	})
 
 	// try to put again and test GetKeys does not return duplicates
@@ -123,16 +132,16 @@ func TestServer(t *testing.T) {
 	if bytes.Equal(challengeb, challengeb2) {
 		t.Fatalf("challenge and challenge2 should not be the same but got: %v and %v", challenge, challenge2)
 	}
-	signature2 := ed25519.Sign(private, challengeb2)
-	if err := client.CommitPut(challengeb2, signature2, vey.PublicKey{Type: vey.SSHEd25519, Key: public}); err != nil {
+	signature2 := ed25519.Sign(edpriv, challengeb2)
+	if err := client.CommitPut(challengeb2, signature2, vey.PublicKey{Type: vey.SSHEd25519, Key: pub}); err != nil {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
 	testGetKeys(t, client, "test@example.com", []vey.PublicKey{
-		{Type: vey.SSHEd25519, Key: public},
+		{Type: vey.SSHEd25519, Key: pub},
 	})
 
-	err = client.BeginDelete("test@example.com", vey.PublicKey{Type: vey.SSHEd25519, Key: public})
+	err = client.BeginDelete("test@example.com", vey.PublicKey{Type: vey.SSHEd25519, Key: pub})
 	if err != nil {
 		t.Fatalf("BeginDelete")
 	}
@@ -151,4 +160,16 @@ func TestServer(t *testing.T) {
 	}
 
 	testGetKeys(t, client, "test@example.com", []vey.PublicKey{})
+}
+
+func TestJSON(t *testing.T) {
+	in := []byte(`{"challenge":"yjIW9LgQPdvZ8BGWs3HADC8zb7yk9CnwDhm4eIxxniM=","publickey":{"key":"c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSU5scWdsbmRod0ViRXVsZU5KckU5QVVhOTdXVThXZjlTQjR2emRZdVF1U0IKCg==","type":0},"signature":"WW6Tqd1shOXvpoW5Lp/TrM5xdTBwgVfaXB6xp6nk+5YSIaQlA0oujGvj2dNnp3PGFdZoNknCm6d9Mkl4QYkADQ=="}`)
+	buf := bytes.NewBuffer(in)
+	dec := json.NewDecoder(buf)
+	dec.DisallowUnknownFields()
+
+	var body Body
+	if err := dec.Decode(&body); err != nil {
+		t.Fatal(err)
+	}
 }

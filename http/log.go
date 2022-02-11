@@ -32,3 +32,11 @@ func (l logger) Error(err error) {
 	}
 	log.Printf("error: %v", err)
 }
+
+type nilLogger struct{}
+
+func NilLogger() Logger {
+	return nilLogger{}
+}
+
+func (l nilLogger) Error(err error) {}

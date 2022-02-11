@@ -5,6 +5,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"testing"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func testGetKeys(t *testing.T, v Vey, email string, expected []PublicKey) {
@@ -46,23 +48,28 @@ func testImpl(t *testing.T, d Digester, c Cache, s Store) {
 
 	challenge := testBeginPut(t, k, "test@example.com")
 
-	public, private, err := ed25519.GenerateKey(rand.Reader)
+	edpub, edpriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
 	}
-	signature := ed25519.Sign(private, challenge)
-	if err := k.CommitPut(challenge, signature, PublicKey{Type: SSHEd25519, Key: public}); err != nil {
+	sshpub, err := ssh.NewPublicKey(edpub)
+	if err != nil {
+		t.Fatalf("NewPublicKey: %v", err)
+	}
+	pub := ssh.MarshalAuthorizedKey(sshpub)
+	signature := ed25519.Sign(edpriv, challenge)
+	if err := k.CommitPut(challenge, signature, PublicKey{Type: SSHEd25519, Key: pub}); err != nil {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
-	invalidSignature := ed25519.Sign(private, []byte(string(challenge)+"invalid"))
-	err = k.CommitPut(challenge, invalidSignature, PublicKey{Type: SSHEd25519, Key: public})
+	invalidSignature := ed25519.Sign(edpriv, []byte(string(challenge)+"invalid"))
+	err = k.CommitPut(challenge, invalidSignature, PublicKey{Type: SSHEd25519, Key: pub})
 	if e, g := ErrVerifyFailed, err; e != g {
 		t.Fatalf("CommitPut: expected %v but got %v", e, g)
 	}
 
 	testGetKeys(t, k, "test@example.com", []PublicKey{
-		{Type: SSHEd25519, Key: public},
+		{Type: SSHEd25519, Key: pub},
 	})
 
 	// try to put again and test GetKeys does not return duplicates
@@ -71,16 +78,16 @@ func testImpl(t *testing.T, d Digester, c Cache, s Store) {
 	if bytes.Equal(challenge, challenge2) {
 		t.Fatalf("challenge and challenge2 should not be the same but got: %v and %v", challenge, challenge2)
 	}
-	signature2 := ed25519.Sign(private, challenge2)
-	if err := k.CommitPut(challenge2, signature2, PublicKey{Type: SSHEd25519, Key: public}); err != nil {
+	signature2 := ed25519.Sign(edpriv, challenge2)
+	if err := k.CommitPut(challenge2, signature2, PublicKey{Type: SSHEd25519, Key: pub}); err != nil {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
 	testGetKeys(t, k, "test@example.com", []PublicKey{
-		{Type: SSHEd25519, Key: public},
+		{Type: SSHEd25519, Key: pub},
 	})
 
-	token, err := k.BeginDelete("test@example.com", PublicKey{Type: SSHEd25519, Key: public})
+	token, err := k.BeginDelete("test@example.com", PublicKey{Type: SSHEd25519, Key: pub})
 	if err != nil {
 		t.Fatalf("BeginDelete")
 	}
