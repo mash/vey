@@ -91,19 +91,6 @@ func (h *VeyHandler) BeginPut(w http.ResponseWriter, r *http.Request, b Body) er
 
 func (h *VeyHandler) CommitPut(w http.ResponseWriter, r *http.Request, b Body) error {
 	if err := h.Vey.CommitPut(b.Challenge, b.Signature, b.PublicKey); err != nil {
-		if err == vey.ErrVerifyFailed {
-			return Error{
-				Code: 400,
-				Msg:  err.Error(),
-				Err:  nil,
-			}
-		} else if err == vey.ErrNotFound {
-			return Error{
-				Code: 404,
-				Msg:  err.Error(),
-				Err:  nil,
-			}
-		}
 		return err
 	}
 	return WriteJSON(w, 200, map[string]interface{}{})

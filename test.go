@@ -10,11 +10,17 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+const (
+	validEmail   = "test@example.com"
+	invalidEmail = ".test.@example.com"
+)
+
 // VeyTest tests the Vey interface.
 // v's cache should be configured to expire in a second.
 // VeyTest includes expiry tests.
 func VeyTest(t *testing.T, v Vey) {
-	testGetKeys(t, v, "test@example.com", []PublicKey{})
+	testGetKeys(t, v, validEmail, []PublicKey{})
+	testGetKeysError(t, v, invalidEmail, ErrInvalidEmail)
 
 	edpriv, pub := testKeygen(t)
 
@@ -22,11 +28,11 @@ func VeyTest(t *testing.T, v Vey) {
 
 	testDelete(t, v, pub)
 
-	testGetKeys(t, v, "test@example.com", []PublicKey{})
+	testGetKeys(t, v, validEmail, []PublicKey{})
 }
 
 func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
-	challenge := testBeginPut(t, v, "test@example.com")
+	challenge := testBeginPut(t, v, validEmail)
 
 	signature := ed25519.Sign(edpriv, challenge)
 	if err := v.CommitPut(challenge, signature, PublicKey{Type: SSHEd25519, Key: pub}); err != nil {
@@ -42,13 +48,13 @@ func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
 		t.Fatalf("CommitPut: expected %#v but got %#v", e, g)
 	}
 
-	testGetKeys(t, v, "test@example.com", []PublicKey{
+	testGetKeys(t, v, validEmail, []PublicKey{
 		{Type: SSHEd25519, Key: pub},
 	})
 
 	// try to put again and test GetKeys does not return duplicates
 
-	challenge2 := testBeginPut(t, v, "test@example.com")
+	challenge2 := testBeginPut(t, v, validEmail)
 	if bytes.Equal(challenge, challenge2) {
 		t.Fatalf("challenge and challenge2 should not be the same but got: %v and %v", challenge, challenge2)
 	}
@@ -57,11 +63,11 @@ func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
-	testGetKeys(t, v, "test@example.com", []PublicKey{
+	testGetKeys(t, v, validEmail, []PublicKey{
 		{Type: SSHEd25519, Key: pub},
 	})
 
-	challenge3 := testBeginPut(t, v, "test@example.com")
+	challenge3 := testBeginPut(t, v, validEmail)
 
 	time.Sleep(2 * time.Second)
 
@@ -76,7 +82,7 @@ func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
 }
 
 func testDelete(t *testing.T, v Vey, pub []byte) {
-	token, err := v.BeginDelete("test@example.com", PublicKey{Type: SSHEd25519, Key: pub})
+	token, err := v.BeginDelete(validEmail, PublicKey{Type: SSHEd25519, Key: pub})
 	if err != nil {
 		t.Fatalf("BeginDelete")
 	}
@@ -121,6 +127,16 @@ func testGetKeys(t *testing.T, v Vey, email string, expected []PublicKey) {
 		if !bytes.Equal(e.Key, got[i].Key) {
 			t.Errorf("testGetKeys: expected %v but got %v", e, got[i])
 		}
+	}
+}
+
+func testGetKeysError(t *testing.T, v Vey, email string, expected error) {
+	_, err := v.GetKeys(email)
+	if err == nil {
+		t.Fatalf("testGetKeysError: expected %v but got nil", expected)
+	}
+	if e, g := expected.Error(), err.Error(); e != g {
+		t.Errorf("testGetKeysError: expected %v but got %v", e, g)
 	}
 }
 

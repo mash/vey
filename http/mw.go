@@ -2,7 +2,6 @@ package http
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 )
 
@@ -20,15 +19,10 @@ func Wrap(h Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := h.ServeHTTP(w, r)
 		if err != nil {
-			var er Error
-			if !errors.As(err, &er) {
-				er = Error{
-					Code: http.StatusInternalServerError,
-					Msg:  http.StatusText(http.StatusInternalServerError),
-					Err:  err,
-				}
+			er := NewError(err)
+			if er.Code == 500 || er.Err != nil {
+				Log.Error(er)
 			}
-			Log.Error(err)
 			_ = WriteJSON(w, er.Code, er)
 		}
 	})

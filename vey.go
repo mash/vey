@@ -1,5 +1,7 @@
 package vey
 
+import "net/mail"
+
 // vey implements Vey interface.
 type vey struct {
 	digest Digester
@@ -15,13 +17,24 @@ func NewVey(digest Digester, cache Cache, store Store) Vey {
 	}
 }
 
+func validateEmail(email string) error {
+	_, err := mail.ParseAddress(email)
+	return err
+}
+
 func (k vey) GetKeys(email string) ([]PublicKey, error) {
+	if err := validateEmail(email); err != nil {
+		return nil, ErrInvalidEmail
+	}
+
 	digest := k.digest.Of(email)
 	return k.store.Get(digest)
 }
 
 func (k vey) BeginDelete(email string, publickey PublicKey) ([]byte, error) {
-	// TODO check email format
+	if err := validateEmail(email); err != nil {
+		return nil, ErrInvalidEmail
+	}
 
 	digest := k.digest.Of(email)
 	token, err := NewToken()
@@ -46,7 +59,9 @@ func (k vey) CommitDelete(token []byte) error {
 }
 
 func (k vey) BeginPut(email string) ([]byte, error) {
-	// TODO check email format
+	if err := validateEmail(email); err != nil {
+		return nil, ErrInvalidEmail
+	}
 
 	digest := k.digest.Of(email)
 	challenge, err := NewChallenge()

@@ -154,7 +154,7 @@ func (l logger) Error(err error) {
 	}
 
 	if aerr, ok := err.(awserr.Error); ok {
-		log.Error().Err(err).Str("code", aerr.Code()).Msg(aerr.Error())
+		log.Error().Err(err).Str("awscode", aerr.Code()).Msg(aerr.Error())
 		return
 	}
 
