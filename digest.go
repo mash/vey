@@ -15,7 +15,7 @@ func NewDigester(salt []byte) Digester {
 
 func (d Digest) Of(email string) EmailDigest {
 	h := sha256.New()
+	h.Write([]byte(email))
 	h.Write(d.salt)
-	sum := h.Sum([]byte(email))
-	return EmailDigest(sum)
+	return EmailDigest(h.Sum(nil))
 }
