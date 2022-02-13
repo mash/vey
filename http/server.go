@@ -97,6 +97,12 @@ func (h *VeyHandler) CommitPut(w http.ResponseWriter, r *http.Request, b Body) e
 				Msg:  err.Error(),
 				Err:  nil,
 			}
+		} else if err == vey.ErrNotFound {
+			return Error{
+				Code: 404,
+				Msg:  err.Error(),
+				Err:  nil,
+			}
 		}
 		return err
 	}

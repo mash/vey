@@ -25,7 +25,7 @@ func TestAWSDynamoDb(t *testing.T) {
 	s := NewDynamoDbStore("teststore", svc)
 	c := NewDynamoDbCache("testcache", svc, time.Second*2)
 
-	testImpl(t, NewDigester(salt), c, s)
+	VeyTest(t, NewVey(NewDigester(salt), c, s))
 }
 
 func TestAWSCacheExpires(t *testing.T) {

@@ -2,10 +2,10 @@ package http
 
 import (
 	"bytes"
-	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -13,7 +13,6 @@ import (
 
 	"github.com/mash/vey"
 	"github.com/mash/vey/email"
-	"golang.org/x/crypto/ssh"
 )
 
 func serve(t *testing.T, h http.Handler) net.Listener {
@@ -31,35 +30,55 @@ func serve(t *testing.T, h http.Handler) net.Listener {
 	return l
 }
 
-func testGetKeys(t *testing.T, v Client, email string, expected []vey.PublicKey) {
-	got, err := v.GetKeys(email)
-	if err != nil {
-		t.Fatalf("testGetKeys: %v", err)
-	}
-	if got == nil {
-		t.Fatalf("testGetKeys: got nil keys")
-	}
-	if e, g := len(expected), len(got); e != g {
-		t.Errorf("testGetKeys: len(got) expected %v but got %v", e, g)
-	}
-	for i, e := range expected {
-		if e.Type != got[i].Type {
-			t.Errorf("testGetKeys: expected %v but got %v", e, got[i])
-		}
-		if !bytes.Equal(e.Key, got[i].Key) {
-			t.Errorf("testGetKeys: expected %v but got %v", e, got[i])
-		}
+// clientAndEmail implements ve.Vey interface.
+type clientAndEmail struct {
+	Client
+	*email.MemSender
+}
+
+func clientVey(c Client, s *email.MemSender) vey.Vey {
+	return clientAndEmail{
+		Client:    c,
+		MemSender: s,
 	}
 }
 
-func testBeginPut(t *testing.T, v Client, email string) {
-	err := v.BeginPut(email)
+func (c clientAndEmail) BeginDelete(email string, publickey vey.PublicKey) ([]byte, error) {
+	err := c.Client.BeginDelete(email, publickey)
 	if err != nil {
-		t.Fatalf("BeginPut: %v", err)
+		return nil, err
 	}
+
+	token := c.MemSender.Token
+	if len(token) == 0 {
+		return nil, errors.New("token is empty")
+	}
+	b, err := base64.StdEncoding.DecodeString(token)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode error: %v", err)
+	}
+	return b, nil
 }
 
-// TestServer tests the server similarly to the way TestMemKeys in keys_test.go but over the HTTP API.
+func (c clientAndEmail) BeginPut(email string) ([]byte, error) {
+	err := c.Client.BeginPut(email)
+	if err != nil {
+		return nil, err
+	}
+
+	challenge := c.MemSender.Challenge
+	if len(challenge) == 0 {
+		return nil, errors.New("challenge is empty")
+	}
+	b, err := base64.StdEncoding.DecodeString(challenge)
+	if err != nil {
+		return nil, fmt.Errorf("base64 decode error: %v", err)
+	}
+	return b, nil
+}
+
+// TestServer tests the server from the client's point of view,
+// and from that point of view, server + email implements the vey.Vey interface.
 func TestServer(t *testing.T) {
 	Log = NilLogger()
 
@@ -73,93 +92,17 @@ func TestServer(t *testing.T) {
 	l := serve(t, h)
 
 	client := NewClient("http://" + l.Addr().String())
-	testGetKeys(t, client, "test@example.com", []vey.PublicKey{})
-
-	testBeginPut(t, client, "test@example.com")
-
-	challenge := sender.Challenge
-	if len(challenge) == 0 {
-		t.Fatalf("challenge is empty")
-	}
-	challengeb, err := base64.StdEncoding.DecodeString(challenge)
-	if err != nil {
-		t.Fatalf("base64 decode error: %v", err)
-	}
+	vey.VeyTest(t, clientVey(client, sender))
 
 	q := url.Values{}
-	q.Set("challenge", challenge)
+	q.Set("challenge", "challenge")
 	next, err := client.Open(q)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	if e, g := "exampleapp://open?"+q.Encode(), next; e != g {
+	if e, g := "exampleapp://open?challenge=challenge", next; e != g {
 		t.Fatalf("open expected %v but got %v", e, g)
 	}
-
-	edpub, edpriv, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		t.Fatalf("GenerateKey: %v", err)
-	}
-	sshpub, err := ssh.NewPublicKey(edpub)
-	if err != nil {
-		t.Fatalf("NewPublicKey: %v", err)
-	}
-	pub := ssh.MarshalAuthorizedKey(sshpub)
-	signature := ed25519.Sign(edpriv, challengeb)
-	if err := client.CommitPut(challengeb, signature, vey.PublicKey{Type: vey.SSHEd25519, Key: pub}); err != nil {
-		t.Fatalf("CommitPut: %v", err)
-	}
-
-	invalidSignature := ed25519.Sign(edpriv, []byte(string(challengeb)+"invalid"))
-	err = client.CommitPut(challengeb, invalidSignature, vey.PublicKey{Type: vey.SSHEd25519, Key: pub})
-	if e, g := vey.ErrVerifyFailed.Error(), err.Error(); e != g {
-		t.Fatalf("CommitPut: expected %v but got %v", e, g)
-	}
-
-	testGetKeys(t, client, "test@example.com", []vey.PublicKey{
-		{Type: vey.SSHEd25519, Key: pub},
-	})
-
-	// try to put again and test GetKeys does not return duplicates
-
-	testBeginPut(t, client, "test@example.com")
-
-	challenge2 := sender.Challenge
-	challengeb2, err := base64.StdEncoding.DecodeString(challenge2)
-	if err != nil {
-		t.Fatalf("base64 decode error: %v", err)
-	}
-	if bytes.Equal(challengeb, challengeb2) {
-		t.Fatalf("challenge and challenge2 should not be the same but got: %v and %v", challenge, challenge2)
-	}
-	signature2 := ed25519.Sign(edpriv, challengeb2)
-	if err := client.CommitPut(challengeb2, signature2, vey.PublicKey{Type: vey.SSHEd25519, Key: pub}); err != nil {
-		t.Fatalf("CommitPut: %v", err)
-	}
-
-	testGetKeys(t, client, "test@example.com", []vey.PublicKey{
-		{Type: vey.SSHEd25519, Key: pub},
-	})
-
-	err = client.BeginDelete("test@example.com", vey.PublicKey{Type: vey.SSHEd25519, Key: pub})
-	if err != nil {
-		t.Fatalf("BeginDelete")
-	}
-	token := sender.Token
-	if len(token) == 0 {
-		t.Fatalf("token is empty")
-	}
-	tokenb, err := base64.StdEncoding.DecodeString(token)
-	if err != nil {
-		t.Fatalf("base64 decode error: %v", err)
-	}
-
-	err = client.CommitDelete(tokenb)
-	if err != nil {
-		t.Fatalf("CommitDelete: %v", err)
-	}
-
-	testGetKeys(t, client, "test@example.com", []vey.PublicKey{})
 }
 
 func TestJSON(t *testing.T) {
