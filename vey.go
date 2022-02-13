@@ -60,13 +60,13 @@ func (k vey) BeginPut(email string) ([]byte, error) {
 // CommitPut verifies the signature with the public key.
 // CommitPut returns ErrVerifyFailed if the signature is invalid.
 func (k vey) CommitPut(challenge, signature []byte, publickey PublicKey) error {
-	verifier := NewVerifier(publickey.Type)
-	if !verifier.Verify(publickey, signature, challenge) {
-		return ErrVerifyFailed
-	}
 	cached, err := k.cache.Get(challenge)
 	if err != nil {
 		return err
+	}
+	verifier := NewVerifier(publickey.Type)
+	if !verifier.Verify(publickey, signature, challenge) {
+		return ErrVerifyFailed
 	}
 	return k.store.Put(cached.EmailDigest, publickey)
 }

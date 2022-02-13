@@ -3,6 +3,7 @@ package vey
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -99,7 +100,7 @@ func (s *DynamoDbStore) Get(d EmailDigest) ([]PublicKey, error) {
 	}
 	k, err := dynamodbattribute.MarshalMap(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("MarshalMap: %w", err)
 	}
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String(s.TableName),
@@ -107,14 +108,15 @@ func (s *DynamoDbStore) Get(d EmailDigest) ([]PublicKey, error) {
 	}
 	result, err := s.D.GetItem(input)
 	if err != nil {
-		return nil, err
+		Log.Error(fmt.Errorf("GetItem: input: %v, err: %w", input, err))
+		return nil, fmt.Errorf("GetItem: %w", err)
 	}
 	if result.Item == nil {
 		return []PublicKey{}, nil
 	}
 	var item DynamoDbStoreItem
 	if err := dynamodbattribute.UnmarshalMap(result.Item, &item); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("UnmarshalMap: %w", err)
 	}
 	ret, err := item.Keys()
 	if err != nil {
@@ -130,7 +132,7 @@ func (s *DynamoDbStore) Delete(d EmailDigest, publickey PublicKey) error {
 	}
 	k, err := dynamodbattribute.MarshalMap(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("MarshalMap: %w", err)
 	}
 	input := &dynamodb.UpdateItemInput{
 		TableName:        aws.String(s.TableName),
@@ -144,7 +146,8 @@ func (s *DynamoDbStore) Delete(d EmailDigest, publickey PublicKey) error {
 	}
 	_, err = s.D.UpdateItem(input)
 	if err != nil {
-		return err
+		Log.Error(fmt.Errorf("UpdateItem: input: %v, err: %w", input, err))
+		return fmt.Errorf("UpdateItem: %w", err)
 	}
 	return nil
 }
@@ -156,7 +159,7 @@ func (s *DynamoDbStore) Put(d EmailDigest, publickey PublicKey) error {
 	}
 	k, err := dynamodbattribute.MarshalMap(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("MarshalMap: %w", err)
 	}
 	input := &dynamodb.UpdateItemInput{
 		TableName:        aws.String(s.TableName),
@@ -170,7 +173,8 @@ func (s *DynamoDbStore) Put(d EmailDigest, publickey PublicKey) error {
 	}
 	_, err = s.D.UpdateItem(input)
 	if err != nil {
-		return err
+		Log.Error(fmt.Errorf("UpdateItem: input: %v, err: %w", input, err))
+		return fmt.Errorf("UpdateItem: %w", err)
 	}
 	return nil
 }
