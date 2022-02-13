@@ -14,7 +14,7 @@ import (
 )
 
 func TestAWSDynamoDb(t *testing.T) {
-	salt := []byte("salt")
+	salt, _ := NewToken()
 
 	sess, err := session.NewSession(&aws.Config{})
 	if err != nil {
@@ -23,7 +23,7 @@ func TestAWSDynamoDb(t *testing.T) {
 	svc := dynamodb.New(sess)
 
 	s := NewDynamoDbStore("teststore", svc)
-	c := NewDynamoDbCache("testcache", svc, time.Second*2)
+	c := NewDynamoDbCache("testcache", svc, time.Second)
 
 	VeyTest(t, NewVey(NewDigester(salt), c, s))
 }

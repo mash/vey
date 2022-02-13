@@ -5,17 +5,28 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
 
-// v's cache should be configured to expire in 2 seconds
+// VeyTest tests the Vey interface.
+// v's cache should be configured to expire in a second.
+// VeyTest includes expiry tests.
 func VeyTest(t *testing.T, v Vey) {
 	testGetKeys(t, v, "test@example.com", []PublicKey{})
 
-	challenge := testBeginPut(t, v, "test@example.com")
-
 	edpriv, pub := testKeygen(t)
+
+	testPut(t, v, edpriv, pub)
+
+	testDelete(t, v, pub)
+
+	testGetKeys(t, v, "test@example.com", []PublicKey{})
+}
+
+func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
+	challenge := testBeginPut(t, v, "test@example.com")
 
 	signature := ed25519.Sign(edpriv, challenge)
 	if err := v.CommitPut(challenge, signature, PublicKey{Type: SSHEd25519, Key: pub}); err != nil {
@@ -50,6 +61,21 @@ func VeyTest(t *testing.T, v Vey) {
 		{Type: SSHEd25519, Key: pub},
 	})
 
+	challenge3 := testBeginPut(t, v, "test@example.com")
+
+	time.Sleep(2 * time.Second)
+
+	signature3 := ed25519.Sign(edpriv, challenge3)
+	err = v.CommitPut(challenge3, signature3, PublicKey{Type: SSHEd25519, Key: pub})
+	if err == nil {
+		t.Fatal("CommitPut: expected ErrNotFound but got nil")
+	}
+	if err.Error() != ErrNotFound.Error() {
+		t.Fatalf("CommitPut: expected %#v but got %#v", ErrNotFound, err)
+	}
+}
+
+func testDelete(t *testing.T, v Vey, pub []byte) {
 	token, err := v.BeginDelete("test@example.com", PublicKey{Type: SSHEd25519, Key: pub})
 	if err != nil {
 		t.Fatalf("BeginDelete")
@@ -62,8 +88,6 @@ func VeyTest(t *testing.T, v Vey) {
 	if err != nil {
 		t.Fatalf("CommitDelete: %v", err)
 	}
-
-	testGetKeys(t, v, "test@example.com", []PublicKey{})
 }
 
 func testKeygen(t *testing.T) (ed25519.PrivateKey, []byte) {

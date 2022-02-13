@@ -17,11 +17,16 @@ import (
 type MemCache struct {
 	m      sync.Mutex
 	values map[string]Cached
+	// might not be the correct implementation of memory cache expiry but don't want to put it in Cached
+	expires   map[string]time.Time
+	expiresIn time.Duration
 }
 
-func NewMemCache() Cache {
+func NewMemCache(expiresIn time.Duration) Cache {
 	return &MemCache{
-		values: make(map[string]Cached),
+		values:    make(map[string]Cached),
+		expires:   make(map[string]time.Time),
+		expiresIn: expiresIn,
 	}
 }
 
@@ -30,6 +35,7 @@ func (c *MemCache) Set(key []byte, val Cached) error {
 	defer c.m.Unlock()
 	str := base64.StdEncoding.EncodeToString(key)
 	c.values[str] = val
+	c.expires[str] = time.Now().Add(c.expiresIn)
 	return nil
 }
 
@@ -38,6 +44,8 @@ func (c *MemCache) Get(key []byte) (Cached, error) {
 	defer c.m.Unlock()
 	str := base64.StdEncoding.EncodeToString(key)
 	if val, ok := c.values[str]; !ok {
+		return Cached{}, ErrNotFound
+	} else if time.Now().After(c.expires[str]) {
 		return Cached{}, ErrNotFound
 	} else {
 		return val, nil

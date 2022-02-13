@@ -77,10 +77,10 @@ func main() {
 		if *serveCache == "dynamodb" {
 			log.Debug().Msgf("using dynamodb cache: %s", *serveCacheDynDBName)
 			svc := dynamodb.New(sess)
-			cache = vey.NewDynamoDbCache(*serveCacheDynDBName, svc, time.Minute*15)
+			cache = vey.NewDynamoDbCache(*serveCacheDynDBName, svc, 15*time.Minute)
 		} else {
 			log.Debug().Msg("using memory cache")
-			cache = vey.NewMemCache()
+			cache = vey.NewMemCache(15 * time.Minute)
 		}
 
 		k := vey.NewVey(vey.NewDigester(salt), cache, store)

@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/mash/vey"
 	"github.com/mash/vey/email"
@@ -83,7 +84,7 @@ func TestServer(t *testing.T) {
 	Log = NilLogger()
 
 	salt := []byte("salt")
-	v := vey.NewVey(vey.NewDigester(salt), vey.NewMemCache(), vey.NewMemStore())
+	v := vey.NewVey(vey.NewDigester(salt), vey.NewMemCache(time.Second), vey.NewMemStore())
 	sender_ := email.NewMemSender()
 
 	open, _ := url.Parse("exampleapp://open")
