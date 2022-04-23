@@ -14,7 +14,7 @@ import (
 )
 
 func TestAWSDynamoDb(t *testing.T) {
-	salt := []byte("salt")
+	salt, _ := NewToken()
 
 	sess, err := session.NewSession(&aws.Config{})
 	if err != nil {
@@ -23,9 +23,9 @@ func TestAWSDynamoDb(t *testing.T) {
 	svc := dynamodb.New(sess)
 
 	s := NewDynamoDbStore("teststore", svc)
-	c := NewDynamoDbCache("testcache", svc, time.Second*2)
+	c := NewDynamoDbCache("testcache", svc, time.Second)
 
-	testImpl(t, NewDigester(salt), c, s)
+	VeyTest(t, NewVey(NewDigester(salt), c, s))
 }
 
 func TestAWSCacheExpires(t *testing.T) {
@@ -55,11 +55,12 @@ func TestAWSCacheExpires(t *testing.T) {
 			Key:  []byte("key"),
 		},
 	})
+	testCacheGetError(t, c, []byte("wrong"), ErrNotFound)
 
 	// cached value should be expired after 2 seconds
 	time.Sleep(time.Second * 3)
 
-	testCacheGet(t, c, token, Cached{})
+	testCacheGetError(t, c, token, ErrNotFound)
 }
 
 func testCacheSet(t *testing.T, c Cache, key []byte, val Cached) {
@@ -78,5 +79,15 @@ func testCacheGet(t *testing.T, c Cache, key []byte, expected Cached) {
 	}
 	if !val.PublicKey.Equal(expected.PublicKey) {
 		t.Fatalf("expected %v, got %v", expected, val)
+	}
+}
+
+func testCacheGetError(t *testing.T, c Cache, key []byte, expected error) {
+	val, err := c.Get(key)
+	if e, g := expected, err; e != g {
+		t.Fatalf("expected %v, got %v", e, g)
+	}
+	if len(val.EmailDigest) != 0 {
+		t.Fatalf("expected empty Cache but got %v", val)
 	}
 }

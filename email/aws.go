@@ -1,6 +1,7 @@
 package email
 
 import (
+	"encoding/json"
 	"net/url"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -59,29 +60,41 @@ type SESSender struct {
 	SES    *ses.SES
 }
 
+type sesData struct {
+	Email            string `json:"email"`
+	Token            string `json:"token,omitempty"`
+	TokenEscaped     string `json:"tokenEscaped,omitempty"`
+	Challenge        string `json:"challenge,omitempty"`
+	ChallengeEscaped string `json:"challengeEscaped,omitempty"`
+}
+
 // SendToken sends the token to the dst email address.
 func (s SESSender) SendToken(dst, token string) error {
 	// use tokenEscaped in template if token is added in query parameter in the template.
-	data := `{
-		"email": "` + dst + `",
-		"token": "` + token + `",
-		"tokenEscaped": "` + url.QueryEscape(token) + `"
-	}`
+	data := sesData{
+		Email:        dst,
+		Token:        token,
+		TokenEscaped: url.QueryEscape(token),
+	}
 	return s.send(dst, "delete", "vey_delete", data)
 }
 
 // SendChallenge sends the challenge to the dst email address.
 func (s SESSender) SendChallenge(dst, challenge string) error {
 	// use challengeEscaped in template if token is added in query parameter.
-	data := `{
-		"email": "` + dst + `",
-		"challenge": "` + challenge + `",
-		"challengeEscaped": "` + url.QueryEscape(challenge) + `"
-	}`
+	data := sesData{
+		Email:            dst,
+		Challenge:        challenge,
+		ChallengeEscaped: url.QueryEscape(challenge),
+	}
 	return s.send(dst, "put", "vey_put", data)
 }
 
-func (s SESSender) send(email, action, template, data string) error {
+func (s SESSender) send(email, action, template string, data sesData) error {
+	j, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
 	input := &ses.SendTemplatedEmailInput{
 		Destination: &ses.Destination{
 			ToAddresses: []*string{
@@ -90,7 +103,7 @@ func (s SESSender) send(email, action, template, data string) error {
 		},
 		Source:       aws.String(s.Config.Source),
 		Template:     aws.String(template),
-		TemplateData: aws.String(data),
+		TemplateData: aws.String(string(j)),
 		Tags: []*ses.MessageTag{
 			{
 				Name:  aws.String("action"),
@@ -115,6 +128,6 @@ func (s SESSender) send(email, action, template, data string) error {
 	}
 
 	// Attempt to send the email.
-	_, err := s.SES.SendTemplatedEmail(input)
+	_, err = s.SES.SendTemplatedEmail(input)
 	return err
 }

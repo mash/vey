@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"net/url"
 	"os"
 	"time"
 
@@ -33,7 +34,6 @@ var (
 
 // API Gateway uses Payload format version v2.0.
 func Handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
-	log.Debug().Msgf("req: %#v", req)
 	return adapter.ProxyWithContext(ctx, req)
 }
 
@@ -57,6 +57,15 @@ func setup() {
 		log.Debug().Msg("debug logging enabled")
 	}
 
+	var open *url.URL
+	if cfg.OpenURL != "" {
+		u, err := url.Parse(cfg.OpenURL)
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to parse OpenURL")
+		}
+		open = u
+	}
+
 	sess, err := session.NewSession(&aws.Config{})
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create aws session")
@@ -77,9 +86,13 @@ func setup() {
 		log.Fatal().Err(err).Msg("failed to load email.yml")
 	}
 
-	s := email.NewLogSender(email.NewSESSender(emailConfig, ses.New(sess)))
+	sender := email.NewSESSender(emailConfig, ses.New(sess))
+	if cfg.Debug {
+		sender = email.NewLogSender(sender)
+	}
+	h := vhttp.NewHandler(k, sender, open)
+
 	vhttp.Log = NewLogger()
-	h := vhttp.NewHandler(k, s)
 
 	log.Info().Msg("starting")
 	adapter = httpadapter.NewV2(h)
@@ -92,6 +105,7 @@ type Config struct {
 	StoreTableName string        `yaml:"store_table_name"`
 	CacheTableName string        `yaml:"cache_table_name"`
 	CacheExpiry    time.Duration `yaml:"cache_expiry"`
+	OpenURL        string        `yaml:"open_url"`
 }
 
 // loadConfig loads config from file encrypted with sops.
@@ -140,7 +154,7 @@ func (l logger) Error(err error) {
 	}
 
 	if aerr, ok := err.(awserr.Error); ok {
-		log.Error().Err(err).Str("code", aerr.Code()).Msg(aerr.Error())
+		log.Error().Err(err).Str("awscode", aerr.Code()).Msg(aerr.Error())
 		return
 	}
 

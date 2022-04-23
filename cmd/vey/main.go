@@ -77,10 +77,10 @@ func main() {
 		if *serveCache == "dynamodb" {
 			log.Debug().Msgf("using dynamodb cache: %s", *serveCacheDynDBName)
 			svc := dynamodb.New(sess)
-			cache = vey.NewDynamoDbCache(*serveCacheDynDBName, svc, time.Minute*15)
+			cache = vey.NewDynamoDbCache(*serveCacheDynDBName, svc, 15*time.Minute)
 		} else {
 			log.Debug().Msg("using memory cache")
-			cache = vey.NewMemCache()
+			cache = vey.NewMemCache(15 * time.Minute)
 		}
 
 		k := vey.NewVey(vey.NewDigester(salt), cache, store)
@@ -98,7 +98,7 @@ func main() {
 
 		svc := ses.New(sess)
 		s := email.NewLogSender(email.NewSESSender(emailConfig, svc))
-		h := vhttp.NewHandler(k, s)
+		h := vhttp.NewHandler(k, s, nil)
 		log.Info().Msg("listening on port " + *servePort)
 		http.ListenAndServe(":"+*servePort, h)
 	}

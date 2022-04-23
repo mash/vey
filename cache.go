@@ -2,7 +2,7 @@ package vey
 
 import (
 	"encoding/base64"
-	"log"
+	"fmt"
 	"sync"
 	"time"
 
@@ -17,11 +17,16 @@ import (
 type MemCache struct {
 	m      sync.Mutex
 	values map[string]Cached
+	// might not be the correct implementation of memory cache expiry but don't want to put it in Cached
+	expires   map[string]time.Time
+	expiresIn time.Duration
 }
 
-func NewMemCache() Cache {
+func NewMemCache(expiresIn time.Duration) Cache {
 	return &MemCache{
-		values: make(map[string]Cached),
+		values:    make(map[string]Cached),
+		expires:   make(map[string]time.Time),
+		expiresIn: expiresIn,
 	}
 }
 
@@ -30,6 +35,7 @@ func (c *MemCache) Set(key []byte, val Cached) error {
 	defer c.m.Unlock()
 	str := base64.StdEncoding.EncodeToString(key)
 	c.values[str] = val
+	c.expires[str] = time.Now().Add(c.expiresIn)
 	return nil
 }
 
@@ -37,7 +43,13 @@ func (c *MemCache) Get(key []byte) (Cached, error) {
 	c.m.Lock()
 	defer c.m.Unlock()
 	str := base64.StdEncoding.EncodeToString(key)
-	return c.values[str], nil
+	if val, ok := c.values[str]; !ok {
+		return Cached{}, ErrNotFound
+	} else if time.Now().After(c.expires[str]) {
+		return Cached{}, ErrNotFound
+	} else {
+		return val, nil
+	}
 }
 
 type DynamoDbCache struct {
@@ -69,7 +81,7 @@ func (s *DynamoDbCache) Get(b []byte) (Cached, error) {
 		"ID": b,
 	})
 	if err != nil {
-		return Cached{}, err
+		return Cached{}, fmt.Errorf("MarshalMap: %w", err)
 	}
 	input := &dynamodb.GetItemInput{
 		TableName: aws.String(s.TableName),
@@ -77,21 +89,21 @@ func (s *DynamoDbCache) Get(b []byte) (Cached, error) {
 	}
 	result, err := s.D.GetItem(input)
 	if err != nil {
-		log.Printf("Get: %#v, input: %#v", err, input)
-		return Cached{}, err
+		Log.Error(fmt.Errorf("GetItem: input: %v, err: %w", input, err))
+		return Cached{}, fmt.Errorf("GetItem: %w", err)
 	}
 	if result.Item == nil {
-		return Cached{}, nil
+		return Cached{}, ErrNotFound
 	}
 	var item DynamoDbCacheItem
 	if err := dynamodbattribute.UnmarshalMap(result.Item, &item); err != nil {
-		return Cached{}, err
+		return Cached{}, fmt.Errorf("UnmarshalMap: %w", err)
 	}
 	// https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/howitworks-ttl.html
 	// "Items that have expired, but haven’t yet been deleted by TTL, still appear in reads"
 	// We check if the item has expired.
 	if time.Now().After(item.ExpiresAt) {
-		return Cached{}, nil
+		return Cached{}, ErrNotFound
 	}
 	return item.Cached, nil
 }
@@ -105,7 +117,7 @@ func (s *DynamoDbCache) Set(b []byte, cached Cached) error {
 	}
 	i, err := dynamodbattribute.MarshalMap(item)
 	if err != nil {
-		return err
+		return fmt.Errorf("MarshalMap: %w", err)
 	}
 	input := &dynamodb.PutItemInput{
 		TableName:           aws.String(s.TableName),
@@ -114,7 +126,8 @@ func (s *DynamoDbCache) Set(b []byte, cached Cached) error {
 	}
 	_, err = s.D.PutItem(input)
 	if err != nil {
-		return err
+		Log.Error(fmt.Errorf("PutItem: input: %v, err: %w", input, err))
+		return fmt.Errorf("PutItem: %w", err)
 	}
 	return nil
 }

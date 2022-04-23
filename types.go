@@ -43,6 +43,8 @@ const (
 )
 
 type PublicKey struct {
+	// Key is in OpenSSH authorized_keys format.
+	// SSHEd25519 is only supported now, so Key should start with "ssh-ed25519 ".
 	Key  []byte        `json:"key"`
 	Type PublicKeyType `json:"type"`
 }

@@ -49,14 +49,12 @@ func NewLogSender(s Sender) Sender {
 
 func (s LogSender) SendToken(email, token string) error {
 	log.Printf("send token: %s to email: %s", token, email)
-	s.Sender.SendToken(email, token)
-	return nil
+	return s.Sender.SendToken(email, token)
 }
 
 func (s LogSender) SendChallenge(email, challenge string) error {
 	log.Printf("send challenge: %s to email: %s", challenge, email)
-	s.Sender.SendChallenge(email, challenge)
-	return nil
+	return s.Sender.SendChallenge(email, challenge)
 }
 
 type NullSender struct{}
