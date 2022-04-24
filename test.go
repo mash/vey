@@ -69,6 +69,7 @@ func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
 
 	challenge3 := testBeginPut(t, v, validEmail)
 
+	// in tests, cache is configured to expire in a second
 	time.Sleep(2 * time.Second)
 
 	signature3 := ed25519.Sign(edpriv, challenge3)
