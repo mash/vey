@@ -79,19 +79,25 @@ func (k vey) BeginPut(email string) ([]byte, error) {
 // CommitPut verifies the signature with the public key.
 // CommitPut returns ErrVerifyFailed if the signature is invalid.
 // The challenge is deleted whether or not verify succeeds.
-func (k vey) CommitPut(challenge, signature []byte, publickey PublicKey) error {
-	cached, err := k.cache.Get(challenge)
+func (k vey) CommitPut(challenge, signature []byte, publickey PublicKey) (err error) {
+	var cached Cached
+	cached, err = k.cache.Get(challenge)
 	if err != nil {
-		return err
+		return
 	}
 	// challenge is only valid once
 	defer func() {
-		_ = k.cache.Del(challenge)
+		er := k.cache.Del(challenge)
+		if err == nil {
+			err = er
+		}
 	}()
 
 	verifier := NewVerifier(publickey.Type)
 	if !verifier.Verify(publickey, signature, challenge) {
-		return ErrVerifyFailed
+		err = ErrVerifyFailed
+		return
 	}
-	return k.store.Put(cached.EmailDigest, publickey)
+	err = k.store.Put(cached.EmailDigest, publickey)
+	return
 }
