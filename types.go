@@ -16,6 +16,7 @@ type Vey interface {
 type Cache interface {
 	Set([]byte, Cached) error
 	Get([]byte) (Cached, error)
+	Del([]byte) error
 }
 
 type Cached struct {

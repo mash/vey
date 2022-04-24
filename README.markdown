@@ -29,8 +29,9 @@ type Vey interface {
 
 // Cache is a short-term key value store.
 type Cache interface {
-	Set(string, Cached) error
-	Get(string) (Cached, error)
+	Set([]byte, Cached) error
+	Get([]byte) (Cached, error)
+	Del([]byte) error
 }
 
 type Cached struct {

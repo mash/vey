@@ -52,6 +52,14 @@ func (c *MemCache) Get(key []byte) (Cached, error) {
 	}
 }
 
+func (c *MemCache) Del(key []byte) error {
+	c.m.Lock()
+	defer c.m.Unlock()
+	str := base64.StdEncoding.EncodeToString(key)
+	delete(c.values, str)
+	return nil
+}
+
 type DynamoDbCache struct {
 	TableName string
 	D         *dynamodb.DynamoDB
@@ -128,6 +136,25 @@ func (s *DynamoDbCache) Set(b []byte, cached Cached) error {
 	if err != nil {
 		Log.Error(fmt.Errorf("PutItem: input: %v, err: %w", input, err))
 		return fmt.Errorf("PutItem: %w", err)
+	}
+	return nil
+}
+
+func (s *DynamoDbCache) Del(b []byte) error {
+	k, err := dynamodbattribute.MarshalMap(map[string][]byte{
+		"ID": b,
+	})
+	if err != nil {
+		return fmt.Errorf("MarshalMap: %w", err)
+	}
+	input := &dynamodb.DeleteItemInput{
+		TableName: aws.String(s.TableName),
+		Key:       k,
+	}
+	_, err = s.D.DeleteItem(input)
+	if err != nil {
+		Log.Error(fmt.Errorf("DeleteItem: input: %v, err: %w", input, err))
+		return fmt.Errorf("DeleteItem: %w", err)
 	}
 	return nil
 }

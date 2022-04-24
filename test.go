@@ -39,8 +39,13 @@ func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
-	invalidSignature := ed25519.Sign(edpriv, []byte(string(challenge)+"invalid"))
-	err := v.CommitPut(challenge, invalidSignature, PublicKey{Type: SSHEd25519, Key: pub})
+	challenge2 := testBeginPut(t, v, validEmail)
+	if bytes.Equal(challenge, challenge2) {
+		t.Fatalf("challenge and challenge2 should not be the same but got: %v and %v", challenge, challenge2)
+	}
+
+	invalidSignature := ed25519.Sign(edpriv, []byte(string(challenge2)+"invalid"))
+	err := v.CommitPut(challenge2, invalidSignature, PublicKey{Type: SSHEd25519, Key: pub})
 	if err == nil {
 		t.Fatal("CommitPut: expected ErrVerifyFailed but got nil")
 	}
@@ -54,12 +59,9 @@ func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
 
 	// try to put again and test GetKeys does not return duplicates
 
-	challenge2 := testBeginPut(t, v, validEmail)
-	if bytes.Equal(challenge, challenge2) {
-		t.Fatalf("challenge and challenge2 should not be the same but got: %v and %v", challenge, challenge2)
-	}
-	signature2 := ed25519.Sign(edpriv, challenge2)
-	if err := v.CommitPut(challenge2, signature2, PublicKey{Type: SSHEd25519, Key: pub}); err != nil {
+	challenge3 := testBeginPut(t, v, validEmail)
+	signature3 := ed25519.Sign(edpriv, challenge3)
+	if err := v.CommitPut(challenge3, signature3, PublicKey{Type: SSHEd25519, Key: pub}); err != nil {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
@@ -67,18 +69,28 @@ func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
 		{Type: SSHEd25519, Key: pub},
 	})
 
-	challenge3 := testBeginPut(t, v, validEmail)
+	// challenge is removed after used
+
+	signature32 := ed25519.Sign(edpriv, challenge3)
+	err = v.CommitPut(challenge3, signature32, PublicKey{Type: SSHEd25519, Key: pub})
+	if !IsNotFound(err) {
+		t.Fatalf("CommitPut: expected not found but got %#v", err)
+	}
+
+	// challenge expires
+
+	challenge4 := testBeginPut(t, v, validEmail)
 
 	// in tests, cache is configured to expire in a second
 	time.Sleep(2 * time.Second)
 
-	signature3 := ed25519.Sign(edpriv, challenge3)
-	err = v.CommitPut(challenge3, signature3, PublicKey{Type: SSHEd25519, Key: pub})
+	signature4 := ed25519.Sign(edpriv, challenge4)
+	err = v.CommitPut(challenge4, signature4, PublicKey{Type: SSHEd25519, Key: pub})
 	if err == nil {
 		t.Fatal("CommitPut: expected ErrNotFound but got nil")
 	}
-	if err.Error() != ErrNotFound.Error() {
-		t.Fatalf("CommitPut: expected %#v but got %#v", ErrNotFound, err)
+	if !IsNotFound(err) {
+		t.Fatalf("CommitPut: expected not found but got %#v", err)
 	}
 }
 
