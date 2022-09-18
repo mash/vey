@@ -31,7 +31,7 @@ func (k vey) GetKeys(email string) ([]PublicKey, error) {
 	return k.store.Get(digest)
 }
 
-func (k vey) BeginDelete(email string, publickey PublicKey) ([]byte, error) {
+func (k vey) BeginDelete(email string, publicKey PublicKey) ([]byte, error) {
 	if err := validateEmail(email); err != nil {
 		return nil, ErrInvalidEmail
 	}
@@ -43,7 +43,7 @@ func (k vey) BeginDelete(email string, publickey PublicKey) ([]byte, error) {
 	}
 	if err := k.cache.Set(token, Cached{
 		EmailDigest: digest,
-		PublicKey:   publickey,
+		PublicKey:   publicKey,
 	}); err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func (k vey) CommitDelete(token []byte) error {
 	return k.store.Delete(cached.EmailDigest, cached.PublicKey)
 }
 
-func (k vey) BeginPut(email string) ([]byte, error) {
+func (k vey) BeginPut(email string, publicKey PublicKey) ([]byte, error) {
 	if err := validateEmail(email); err != nil {
 		return nil, ErrInvalidEmail
 	}
@@ -70,6 +70,7 @@ func (k vey) BeginPut(email string) ([]byte, error) {
 	}
 	if err := k.cache.Set(challenge, Cached{
 		EmailDigest: digest,
+		PublicKey:   publicKey,
 	}); err != nil {
 		return nil, err
 	}
@@ -79,7 +80,7 @@ func (k vey) BeginPut(email string) ([]byte, error) {
 // CommitPut verifies the signature with the public key.
 // CommitPut returns ErrVerifyFailed if the signature is invalid.
 // The challenge is deleted whether or not verify succeeds.
-func (k vey) CommitPut(challenge, signature []byte, publickey PublicKey) (err error) {
+func (k vey) CommitPut(challenge, signature []byte) (err error) {
 	var cached Cached
 	cached, err = k.cache.Get(challenge)
 	if err != nil {
@@ -93,11 +94,12 @@ func (k vey) CommitPut(challenge, signature []byte, publickey PublicKey) (err er
 		}
 	}()
 
-	verifier := NewVerifier(publickey.Type)
-	if !verifier.Verify(publickey, signature, challenge) {
+	publicKey := cached.PublicKey
+	verifier := NewVerifier(publicKey.Type)
+	if !verifier.Verify(publicKey, signature, challenge) {
 		err = ErrVerifyFailed
 		return
 	}
-	err = k.store.Put(cached.EmailDigest, publickey)
+	err = k.store.Put(cached.EmailDigest, publicKey)
 	return
 }

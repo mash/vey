@@ -32,20 +32,21 @@ func VeyTest(t *testing.T, v Vey) {
 }
 
 func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
-	challenge := testBeginPut(t, v, validEmail)
+	publicKey := PublicKey{Type: SSHEd25519, Key: pub}
+	challenge := testBeginPut(t, v, validEmail, publicKey)
 
 	signature := ed25519.Sign(edpriv, challenge)
-	if err := v.CommitPut(challenge, signature, PublicKey{Type: SSHEd25519, Key: pub}); err != nil {
+	if err := v.CommitPut(challenge, signature); err != nil {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
-	challenge2 := testBeginPut(t, v, validEmail)
+	challenge2 := testBeginPut(t, v, validEmail, publicKey)
 	if bytes.Equal(challenge, challenge2) {
 		t.Fatalf("challenge and challenge2 should not be the same but got: %v and %v", challenge, challenge2)
 	}
 
-	invalidSignature := ed25519.Sign(edpriv, []byte(string(challenge2)+"invalid"))
-	err := v.CommitPut(challenge2, invalidSignature, PublicKey{Type: SSHEd25519, Key: pub})
+	invalidSignature := ed25519.Sign(edpriv, append(challenge2, []byte("invalid")...))
+	err := v.CommitPut(challenge2, invalidSignature)
 	if err == nil {
 		t.Fatal("CommitPut: expected ErrVerifyFailed but got nil")
 	}
@@ -59,9 +60,9 @@ func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
 
 	// try to put again and test GetKeys does not return duplicates
 
-	challenge3 := testBeginPut(t, v, validEmail)
+	challenge3 := testBeginPut(t, v, validEmail, publicKey)
 	signature3 := ed25519.Sign(edpriv, challenge3)
-	if err := v.CommitPut(challenge3, signature3, PublicKey{Type: SSHEd25519, Key: pub}); err != nil {
+	if err := v.CommitPut(challenge3, signature3); err != nil {
 		t.Fatalf("CommitPut: %v", err)
 	}
 
@@ -72,20 +73,20 @@ func testPut(t *testing.T, v Vey, edpriv ed25519.PrivateKey, pub []byte) {
 	// challenge is removed after used
 
 	signature32 := ed25519.Sign(edpriv, challenge3)
-	err = v.CommitPut(challenge3, signature32, PublicKey{Type: SSHEd25519, Key: pub})
+	err = v.CommitPut(challenge3, signature32)
 	if !IsNotFound(err) {
 		t.Fatalf("CommitPut: expected not found but got %#v", err)
 	}
 
 	// challenge expires
 
-	challenge4 := testBeginPut(t, v, validEmail)
+	challenge4 := testBeginPut(t, v, validEmail, publicKey)
 
 	// in tests, cache is configured to expire in a second
 	time.Sleep(2 * time.Second)
 
 	signature4 := ed25519.Sign(edpriv, challenge4)
-	err = v.CommitPut(challenge4, signature4, PublicKey{Type: SSHEd25519, Key: pub})
+	err = v.CommitPut(challenge4, signature4)
 	if err == nil {
 		t.Fatal("CommitPut: expected ErrNotFound but got nil")
 	}
@@ -153,8 +154,8 @@ func testGetKeysError(t *testing.T, v Vey, email string, expected error) {
 	}
 }
 
-func testBeginPut(t *testing.T, v Vey, email string) []byte {
-	challenge, err := v.BeginPut(email)
+func testBeginPut(t *testing.T, v Vey, email string, publicKey PublicKey) []byte {
+	challenge, err := v.BeginPut(email, publicKey)
 	if err != nil {
 		t.Fatalf("BeginPut: %v", err)
 	}

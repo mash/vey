@@ -6,10 +6,10 @@ import "bytes"
 // Structs that implement Vey interface may use Cache, Verifier, Store interface to implement the API.
 type Vey interface {
 	GetKeys(email string) ([]PublicKey, error)
-	BeginDelete(email string, publickey PublicKey) (token []byte, err error)
+	BeginDelete(email string, publicKey PublicKey) (token []byte, err error)
 	CommitDelete(token []byte) error
-	BeginPut(email string) (challenge []byte, err error)
-	CommitPut(challenge, signature []byte, publickey PublicKey) error
+	BeginPut(email string, publicKey PublicKey) (challenge []byte, err error)
+	CommitPut(challenge, signature []byte) error
 }
 
 // Cache is a short-term key value store.
@@ -26,7 +26,7 @@ type Cached struct {
 
 // Verifier verifies the signature with the public key.
 type Verifier interface {
-	Verify(publickey PublicKey, signature, challenge []byte) bool
+	Verify(publicKey PublicKey, signature, challenge []byte) bool
 }
 
 // Store stores a unique set of public keys for a given email address hash.

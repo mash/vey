@@ -34,13 +34,13 @@ func (s *MemStore) Get(d EmailDigest) ([]PublicKey, error) {
 	return ret, nil
 }
 
-func (s *MemStore) Delete(d EmailDigest, publickey PublicKey) error {
+func (s *MemStore) Delete(d EmailDigest, publicKey PublicKey) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
 	key := base64.StdEncoding.EncodeToString(d)
 	for i, v := range s.values[key] {
-		if v.Equal(publickey) {
+		if v.Equal(publicKey) {
 			s.values[key] = append(s.values[key][:i], s.values[key][i+1:]...)
 			return nil
 		}
@@ -48,17 +48,17 @@ func (s *MemStore) Delete(d EmailDigest, publickey PublicKey) error {
 	return nil
 }
 
-func (s *MemStore) Put(d EmailDigest, publickey PublicKey) error {
+func (s *MemStore) Put(d EmailDigest, publicKey PublicKey) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
 	key := base64.StdEncoding.EncodeToString(d)
 	for _, v := range s.values[key] {
-		if v.Equal(publickey) {
+		if v.Equal(publicKey) {
 			return nil
 		}
 	}
-	s.values[key] = append(s.values[key], publickey)
+	s.values[key] = append(s.values[key], publicKey)
 	return nil
 }
 
@@ -126,7 +126,7 @@ func (s *DynamoDbStore) Get(d EmailDigest) ([]PublicKey, error) {
 }
 
 // Delete atomically deletes the public key from the set of public keys for the email digest.
-func (s *DynamoDbStore) Delete(d EmailDigest, publickey PublicKey) error {
+func (s *DynamoDbStore) Delete(d EmailDigest, publicKey PublicKey) error {
 	key := DynamoDbStoreItem{
 		ID: d,
 	}
@@ -140,7 +140,7 @@ func (s *DynamoDbStore) Delete(d EmailDigest, publickey PublicKey) error {
 		UpdateExpression: aws.String("DELETE publickeys :publickey"),
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 			":publickey": {
-				BS: [][]byte{encodeDynamoDb(publickey)},
+				BS: [][]byte{encodeDynamoDb(publicKey)},
 			},
 		},
 	}
@@ -153,7 +153,7 @@ func (s *DynamoDbStore) Delete(d EmailDigest, publickey PublicKey) error {
 }
 
 // Put atomically adds the public key in the set of public keys for the email digest.
-func (s *DynamoDbStore) Put(d EmailDigest, publickey PublicKey) error {
+func (s *DynamoDbStore) Put(d EmailDigest, publicKey PublicKey) error {
 	key := DynamoDbStoreItem{
 		ID: d,
 	}
@@ -167,7 +167,7 @@ func (s *DynamoDbStore) Put(d EmailDigest, publickey PublicKey) error {
 		UpdateExpression: aws.String("ADD publickeys :publickey"),
 		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 			":publickey": {
-				BS: [][]byte{encodeDynamoDb(publickey)},
+				BS: [][]byte{encodeDynamoDb(publicKey)},
 			},
 		},
 	}

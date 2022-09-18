@@ -34,7 +34,7 @@ func NewHandler(vey vey.Vey, sender email.Sender, open *url.URL) http.Handler {
 
 type Body struct {
 	Email     string        `json:"email,omitempty"`
-	PublicKey vey.PublicKey `json:"publickey,omitempty"`
+	PublicKey vey.PublicKey `json:"publicKey,omitempty"`
 	Token     []byte        `json:"token,omitempty"`
 	Challenge []byte        `json:"challenge,omitempty"`
 	Signature []byte        `json:"signature,omitempty"`
@@ -79,7 +79,7 @@ func (h *VeyHandler) CommitDelete(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (h *VeyHandler) BeginPut(w http.ResponseWriter, r *http.Request, b Body) error {
-	challenge, err := h.Vey.BeginPut(b.Email)
+	challenge, err := h.Vey.BeginPut(b.Email, b.PublicKey)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (h *VeyHandler) BeginPut(w http.ResponseWriter, r *http.Request, b Body) er
 }
 
 func (h *VeyHandler) CommitPut(w http.ResponseWriter, r *http.Request, b Body) error {
-	if err := h.Vey.CommitPut(b.Challenge, b.Signature, b.PublicKey); err != nil {
+	if err := h.Vey.CommitPut(b.Challenge, b.Signature); err != nil {
 		return err
 	}
 	return WriteJSON(w, 200, map[string]interface{}{})

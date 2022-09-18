@@ -44,8 +44,8 @@ func clientVey(c Client, s *email.MemSender) vey.Vey {
 	}
 }
 
-func (c clientAndEmail) BeginDelete(email string, publickey vey.PublicKey) ([]byte, error) {
-	err := c.Client.BeginDelete(email, publickey)
+func (c clientAndEmail) BeginDelete(email string, publicKey vey.PublicKey) ([]byte, error) {
+	err := c.Client.BeginDelete(email, publicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -61,8 +61,8 @@ func (c clientAndEmail) BeginDelete(email string, publickey vey.PublicKey) ([]by
 	return b, nil
 }
 
-func (c clientAndEmail) BeginPut(email string) ([]byte, error) {
-	err := c.Client.BeginPut(email)
+func (c clientAndEmail) BeginPut(email string, publicKey vey.PublicKey) ([]byte, error) {
+	err := c.Client.BeginPut(email, publicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func TestServer(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	in := []byte(`{"challenge":"yjIW9LgQPdvZ8BGWs3HADC8zb7yk9CnwDhm4eIxxniM=","publickey":{"key":"c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSU5scWdsbmRod0ViRXVsZU5KckU5QVVhOTdXVThXZjlTQjR2emRZdVF1U0IKCg==","type":0},"signature":"WW6Tqd1shOXvpoW5Lp/TrM5xdTBwgVfaXB6xp6nk+5YSIaQlA0oujGvj2dNnp3PGFdZoNknCm6d9Mkl4QYkADQ=="}`)
+	in := []byte(`{"challenge":"yjIW9LgQPdvZ8BGWs3HADC8zb7yk9CnwDhm4eIxxniM=","publicKey":{"key":"c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSU5scWdsbmRod0ViRXVsZU5KckU5QVVhOTdXVThXZjlTQjR2emRZdVF1U0IKCg==","type":0},"signature":"WW6Tqd1shOXvpoW5Lp/TrM5xdTBwgVfaXB6xp6nk+5YSIaQlA0oujGvj2dNnp3PGFdZoNknCm6d9Mkl4QYkADQ=="}`)
 	buf := bytes.NewBuffer(in)
 	dec := json.NewDecoder(buf)
 	dec.DisallowUnknownFields()

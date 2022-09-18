@@ -12,7 +12,7 @@ import (
 
 // Client is a HTTP client that consumes Vey's HTTP APIs.
 type Client struct {
-	http.Client
+	*http.Client
 	root url.URL
 }
 
@@ -23,7 +23,7 @@ func NewClient(root string) Client {
 		panic(err)
 	}
 	return Client{
-		Client: http.Client{
+		Client: &http.Client{
 			// Client does not follow redirects, to be able to get the Location header in Open().
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
@@ -72,8 +72,8 @@ func (c Client) CommitDelete(token []byte) error {
 }
 
 // BeginPut calls the BeginPut interface on the Vey server.
-func (c Client) BeginPut(email string) error {
-	res, err := c.Do("/beginPut", Body{Email: email})
+func (c Client) BeginPut(email string, publicKey vey.PublicKey) error {
+	res, err := c.Do("/beginPut", Body{Email: email, PublicKey: publicKey})
 	if err != nil {
 		return err
 	}
@@ -82,11 +82,10 @@ func (c Client) BeginPut(email string) error {
 }
 
 // CommitPut calls the CommitPut interface on the Vey server.
-func (c Client) CommitPut(challenge, signature []byte, publicKey vey.PublicKey) error {
+func (c Client) CommitPut(challenge, signature []byte) error {
 	res, err := c.Do("/commitPut", Body{
 		Challenge: challenge,
 		Signature: signature,
-		PublicKey: publicKey,
 	})
 	if err != nil {
 		return err
